@@ -200,6 +200,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-ingest everything (after model or chunking changes)",
     )
+    run.add_argument(
+        "--controls",
+        type=int,
+        default=12,
+        help="deliberately wrong answers judged alongside the real ones, to check the judge (default 12)",
+    )
     run.set_defaults(func=_eval_run)
     compare = eval_actions.add_parser("compare", help="per-metric changes between two result files")
     compare.add_argument("before", type=Path)
@@ -484,7 +490,11 @@ def _eval_run(args: argparse.Namespace) -> int:
         print(exc, file=sys.stderr)
         return 1
     config = EvalConfig(
-        retrieval=args.retrieval, thinking=args.thinking, judge=not args.no_judge, fresh=args.fresh
+        retrieval=args.retrieval,
+        thinking=args.thinking,
+        judge=not args.no_judge,
+        fresh=args.fresh,
+        controls=args.controls,
     )
     result = Runner(
         eval_set, config, log=lambda line: print(line, flush=True)
@@ -552,6 +562,11 @@ def _eval_agreement(args: argparse.Namespace) -> int:
     print(
         f"{result['labeled']} labeled · agreement {result['agreement']} · Cohen's κ {result['kappa']}"
     )
+    for subset in ("real", "controls"):
+        part = result[subset]
+        print(
+            f"  {subset}: {part['n']} labeled · agreement {part['agreement']} · κ {part['kappa']}"
+        )
     trusted = result["agreement"] is not None and result["agreement"] >= JUDGE_AGREEMENT_MIN
     print(
         "Guardian metrics now count toward the pass criteria."

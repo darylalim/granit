@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v26 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v27 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v26: M0–M6 done; M7 evaluation built and run on the public set (private set and Guardian check pending).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v27: M0–M7 done; the judge check now has control answers (private set and the 50 hand labels pending).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -97,6 +97,10 @@ Granite-Docling finds some tables but transcribes none of their cells** (an empt
 line items), so their content never reached search; Vision now fills those tables at ingest, and "Accurate tables" now puts
 Vision's cells into the chunks (it only stored them before). Text-layer words missing from the chunks: 33.6 % → 1.3 %. Results
 and the open findings are in §4.9 *First results*; the table default was decided (§4.9 *Tables*: Docling, Vision for empty tables).
+
+**Changes in v27:** **control answers** for checking the judge (§4.9 *Trusting the judge*): real answers mostly pass, so 50 hand
+labels of real verdicts alone couldn't tell a good judge from one that always says "pass". Each run now also judges 12 deliberately
+wrong answers; Guardian caught 12 / 12 on the public set.
 ---
 
 ## 1. Scope (v1)
@@ -1403,6 +1407,19 @@ were fixed in the harness instead (written amounts like `$16,500` vs spoken word
 Guardian is a Granite model judging a Granite model, so it may share the LLM's blind spots. Before its scores count toward pass
 criteria (and before v1.1 badges are turned on): hand-label **50 verdicts** (grounded yes/no) and compute agreement. **Required: ≥ 85 % agreement**, with
 Cohen's κ reported. Until then, Guardian metrics are shown as **informational only**. The check is repeated after any Guardian or prompt change.
+
+**Control answers (v27, `evaluate/controls.py`).** Real answers mostly pass (23 of 24 on the public set), so a judge that always said
+"pass" would agree with a person ~96 % of the time on real verdicts. Each `granit eval run` therefore also judges **12 deliberately
+wrong answers** built from real ones: a **number** changed (`$12,640.00` → `$17,317.00`: groundedness should fail) or **another
+question's answer** under this question (answer relevance should fail). They serve twice:
+- **Automatically, every run:** `guardian.controls.caught`, the share of planted errors caught. **Public set (2026-10-04): 12 / 12**
+  (numbers 6 / 6 ungrounded; swaps 6 / 6 irrelevant), while relevance correctly still passed 4 of the 5 number controls that
+  answered the question. Real-answer pass rates never include controls.
+- **In the hand check:** `granit eval agreement` mixes them in **blind**, up to a third of the 50, so the labels contain failures
+  to catch: a judge that missed every control could agree on at most ~67 % and fails the 85 % bar. Agreement and κ are reported for
+  real answers and controls separately.
+
+Planted errors are blunter than real ones, so the hand check (on real answers too) still decides whether Guardian counts.
 
 #### Running and comparing
 

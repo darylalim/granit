@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v23 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v24 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v23: M0–M4 done (store + search); 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v24: M0–M5 done (reasoning + phase switching); 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -78,6 +78,10 @@ choice was corrected:** `tokenchars '-_./'` glued punctuation to ordinary words 
 share a normalization that keeps IDs whole and splits everything else. Tables are chunked as Markdown; failed jobs wait for the next
 run instead of being replayed; Phase A peaked at 12.8 GB with the MLX cache cap; hybrid + rerank ≈ 90 ms per question. M3's
 `document.json` no longer embeds base64 page images (175 → 19 KB for a 2-page scan).
+**Changes in v24 (M5):** the phase manager, Q&A with citations and meeting summaries built (§2.1, §2.1.1). **Thinking "low" is
+confirmed as the default** (off rambled to the token limit, on never answered); `mlx_lm.server` has no structured output, so JSON
+comes from strict instructions + schema validation + one repair turn; `qa_turns` records every answer with its retrieval trace;
+measured switch: stop 0.09 s, Q&A back and warm in 7.3 s.
 ---
 
 ## 1. Scope (v1)
@@ -137,6 +141,31 @@ live (immediate) answer verification. **v1.1:** batch verification of answers an
   keeps your typed question until Q&A is back. Extract results appear in the Library when their job finishes.
 - **Memory is freed by ending processes.** Stopping a process reliably returns all of its memory, which makes
   phase switching safer than unloading models inside a long-running process.
+- **As built in M5 (`models/phases.py`):** each answer holds a `chat()` lease; no switch starts while one is open, and questions
+  during a switch get `PhaseBusy` with the banner text ("Q&A paused: ingesting 2 files"). `tick()` (called by the UI) switches when
+  jobs are queued and Q&A has been idle for **60 s**; **"Process now"** switches as soon as the answer in progress finishes. The
+  worker runs as its own process (`python -m granit.ingest.worker`) and drains the whole queue; Q&A is **always** restarted,
+  health-checked and warmed up afterwards, even when the batch fails. The manager refuses to start a second LLM server if one is
+  already answering on the port. **Measured (2 files):** stop 0.09 s → worker 13.0 s (process start, model loads, both files;
+  peak 13.8 GB) → Q&A back and warm in 7.3 s. Unit tests run it as a state machine with fake processes (never two phases at
+  once, one batch per queue, Q&A back after a crash); a golden test does a real B → A → B switch and answers about the new file.
+
+### 2.1.1 Reasoning as built (M5, `reason/`)
+
+- **Answers:** search (hybrid + rerank, top 8) → a prompt with as many sources as fit the **16K budget** (exact counts with the
+  LLM's own tokenizer; lower-ranked sources are dropped first, a smaller one may still fit) → Granite 4.2 with thinking **low** →
+  citations (`[2]`, `[1, 3]`, `[2–4]`) mapped back to chunks → the turn stored in **`qa_turns`** with its `retrieval_trace`.
+  The rules: only facts from the sources, cite every statement, copy numbers / IDs exactly, **decline with exactly "Not found in your
+  documents."** when unanswerable (no LLM call at all when retrieval finds nothing), say when sources disagree.
+- **Meetings:** transcript lines with timestamps → JSON (`summary`, `decisions`, `action_items` with owner / task / due in the
+  transcript's own words), validated against a JSON Schema with one repair turn. Over the section budget: section by section, then a
+  combine step that keeps the final version of anything changed later. Stored as a `summary` extraction (replaced on re-run,
+  removed on re-ingest).
+- **Measured on the fixture library:** "Q2 revenue" → 145 thousand USD [chart]; "draft to Legal" → Marcus by Wednesday [meeting, memo];
+  invoice total and due date → exact; a cross-source question cites report, memo and meeting; questions outside the documents are
+  declined. 2–5 s per answer. The 31 s meeting: valid JSON on the first try (6.9 s): Marcus / Elena action items, Tuesday decision.
+- CLI: `granit ask "…" [--thinking off|low|on]` (streams the answer) and `granit meeting SOURCE`; both use the running Q&A server,
+  or start one for the command (never while an ingest worker holds Phase A).
 
 ### 2.2 Models stay out of the Streamlit process
 
@@ -1417,7 +1446,8 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Vision rewrites field values (dates seen in M3) | `format: date` normalization + format check; ambiguous dates flagged, never guessed; M7 field accuracy |
 | Tight transformers version window (≥ 5.16, Docling excludes some 5.x) | Commit `uv.lock`; upgrade deliberately |
 | MLX in Streamlit threads | Models only in the worker process / `mlx_lm.server` (by design) |
-| Thinking mode slows answers | `reasoning_effort: "low"` by default; a per-question toggle in the UI. M1: Granite 4.2 thinks unless `enable_thinking: false` |
+| Thinking mode slows answers | **`reasoning_effort: "low"` by default (confirmed in M5)**; per-question toggle in the UI. On a 3K-token RAG prompt: off **rambled to the token limit** (32 s), low gave a short answer in 11 s, full thinking used its whole budget without answering. On the fixture library, low answers in 2–5 s. Known: on some questions low still narrates its reasoning in the answer ("…So answer: 145"); M7's answer checks track it |
+| No structured output in `mlx_lm.server` (no JSON schema / `response_format`) | Strict JSON instructions, parse + JSON Schema validation, one repair turn with the error (`LLMClient.chat_json`); meeting summaries were valid on the first try in M5 |
 | **Long prompts are slow to start (M1)**: prefill is compute-bound at ~260–345 tok/s, so TTFT is ~10 s for a 3K-token RAG prompt and ~1 min at the 16K cap | Keep RAG prompts small (top-8 chunks ≈ 3K tokens); stream answers; show "reading N chunks…" progress; reuse the prompt cache for follow-up questions on the same document; 16K cap with sectioned meeting summaries |
 | Sectioned meeting summaries miss links across sections (e.g. a decision reversed later in the meeting) | Combine step sees every section summary; M7 action-item recall on meetings over an hour; fallback: `--kv-bits 8` at 32K (§3.3) |
 | **Phase B memory grows past the GPU limit (M1)**: mlx-lm keeps up to 10 prompt KV caches with no byte limit, and MLX caches freed KV buffers; a 30K request reached 24.7 GB alone | `--prompt-cache-bytes 2GB` + MLX cache limit 1 GB via `granit.models.mlx_server` (defaults in `config.py`); 16K context cap; `granit bench` re-checks the budget |
@@ -1479,4 +1509,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Claude Code hooks | H1 format/lint after edits · H2 protected paths · H3 command guards (uv only, no `turboctc-nc`, no GPU-limit tuning) · H4 one phase at a time · H5 quality gate on Stop · H6 session context; shared via `.claude/settings.json` |
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
-| Next step | M2 audio ingest (the ingest worker sets an MLX cache limit; Phase A peaked at 15.6 GB from cached buffers) |
+| Next step | M6 Streamlit UI (Ingest with "Process now" + per-upload "Accurate tables", Library, Ask with streaming + citations + phase banner, Extract) on the M5 phase manager |

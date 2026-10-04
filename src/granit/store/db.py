@@ -105,6 +105,25 @@ MIGRATIONS: list[str] = [
     CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     INSERT INTO meta (key, value) VALUES ('corpus_version', '0');
     """,
+    # 2: M5 Q&A history (PLAN.md §2.4, §4.9): every answer with its sources, citations and per-stage retrieval trace
+    """
+    CREATE TABLE qa_turns (
+        id INTEGER PRIMARY KEY,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        declined INTEGER NOT NULL,
+        source_chunk_ids TEXT NOT NULL,
+        cited_chunk_ids TEXT NOT NULL,
+        model TEXT NOT NULL,
+        thinking TEXT NOT NULL,
+        retrieval TEXT NOT NULL,
+        retrieval_trace TEXT NOT NULL,
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        latency TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    """,
 ]
 
 
@@ -442,7 +461,7 @@ class Store:
                     "INSERT INTO chunk_vectors (chunk_id, model_revision, embedding) VALUES (?, ?, ?)",
                     (chunk_id, model_revision, vector_blob(vector)),
                 )
-            self._insert_extractions(job, extractions)
+            self._insert_extractions(job.id, job.source_id, extractions)
             self.conn.execute(
                 "UPDATE sources SET status = 'ready', info = ? WHERE id = ?",
                 (json.dumps(info or {}), job.source_id),
@@ -452,17 +471,19 @@ class Store:
 
     def complete_extract(self, job: Job, extraction: NewExtraction) -> None:
         with transaction(self.conn):
-            self._insert_extractions(job, [extraction])
+            self._insert_extractions(job.id, job.source_id, [extraction])
             self._finish(job)
 
-    def _insert_extractions(self, job: Job, extractions: Sequence[NewExtraction]) -> None:
+    def _insert_extractions(
+        self, job_id: int | None, source_id: int, extractions: Sequence[NewExtraction]
+    ) -> None:
         for e in extractions:
             self.conn.execute(
                 "INSERT INTO extractions (source_id, job_id, kind, format, content, schema, valid, errors, missing,"
                 " page, crop, model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    job.source_id,
-                    job.id,
+                    source_id,
+                    job_id,
                     e.kind,
                     e.format,
                     e.content,
@@ -486,6 +507,59 @@ class Store:
         self.conn.execute(
             "UPDATE meta SET value = CAST(value AS INTEGER) + 1 WHERE key = 'corpus_version'"
         )
+
+    # Q&A history and Phase B outputs
+
+    def record_turn(
+        self,
+        *,
+        question: str,
+        answer: str,
+        declined: bool,
+        source_chunk_ids: Sequence[int],
+        cited_chunk_ids: Sequence[int],
+        model: str,
+        thinking: str,
+        retrieval: dict[str, Any],
+        retrieval_trace: dict[str, Any],
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        latency: dict[str, float],
+    ) -> int:
+        with transaction(self.conn):
+            cursor = self.conn.execute(
+                "INSERT INTO qa_turns (question, answer, declined, source_chunk_ids, cited_chunk_ids, model, thinking,"
+                " retrieval, retrieval_trace, prompt_tokens, completion_tokens, latency, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    question,
+                    answer,
+                    int(declined),
+                    json.dumps(list(source_chunk_ids)),
+                    json.dumps(list(cited_chunk_ids)),
+                    model,
+                    thinking,
+                    json.dumps(retrieval),
+                    json.dumps(retrieval_trace),
+                    prompt_tokens,
+                    completion_tokens,
+                    json.dumps(latency),
+                    now(),
+                ),
+            )
+        return int(cursor.lastrowid or 0)
+
+    def turns(self, limit: int = 50) -> list[sqlite3.Row]:
+        return list(self.conn.execute("SELECT * FROM qa_turns ORDER BY id DESC LIMIT ?", (limit,)))
+
+    def replace_extraction(self, source: Source, extraction: NewExtraction) -> None:
+        """Store a Phase B result (e.g. a meeting summary), replacing an earlier one of the same kind."""
+        with transaction(self.conn):
+            self.conn.execute(
+                "DELETE FROM extractions WHERE source_id = ? AND kind = ?",
+                (source.id, extraction.kind),
+            )
+            self._insert_extractions(None, source.id, [extraction])
 
     # reads used by search
 

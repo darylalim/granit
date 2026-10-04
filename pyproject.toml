@@ -1,0 +1,72 @@
+[project]
+name = "granit"
+version = "0.1.0.dev0"
+description = "Private, fully local document & meeting intelligence on Apple Silicon with IBM Granite models on MLX."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Daryl Lim" }]
+requires-python = ">=3.12,<3.13"
+keywords = ["ibm-granite", "mlx", "apple-silicon", "rag", "local-llm", "docling", "speech-to-text"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# Versions verified together in PLAN.md §3.4. Upgrade deliberately: the transformers window is narrow
+# (mlx-vlm / mlx-audio need >= 5.14, Docling on macOS excludes 5.9–5.15).
+dependencies = [
+    "mlx==0.32.3",
+    "mlx-lm==0.32.0",
+    "mlx-vlm==0.7.4",
+    "mlx-audio==0.5.7",
+    "docling[vlm]==2.133.0",
+    "transformers==5.18.0",
+    "sentence-transformers==6.1.0",
+    "torch==2.14.1",
+    "streamlit==1.65.0",
+    "huggingface-hub[hf-xet]>=1.0",
+    "miniaudio>=1.61",
+    "jsonschema>=4.23",
+    "numpy>=2.0",
+]
+
+[project.scripts]
+granit = "granit.cli:main"
+
+[dependency-groups]
+lint = ["ruff==0.16.10"]
+dev = [
+    { include-group = "lint" },
+    "ty==0.0.84",
+    "pytest==9.1.1",
+]
+
+[tool.uv]
+# uv-managed CPython: its SQLite has FTS5 + enable_load_extension, verified in PLAN.md §2.3 (sqlite-vec later).
+python-preference = "only-managed"
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Markdown code blocks are documentation (PLAN.md keeps aligned comments); don't format or lint them.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PTH"]
+# E501: `ruff format` owns line length; it leaves long strings and comments alone, which is fine.
+# RUF001/RUF002: typographic text (§, –, →) is intentional, and model-card prompts are copied verbatim.
+ignore = ["E501", "RUF001", "RUF002"]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-m", "not model", "--strict-markers"]
+markers = ["model: needs downloaded model weights and the Apple GPU (run on the Mac with `-m model`)"]

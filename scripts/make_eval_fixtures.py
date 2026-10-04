@@ -266,10 +266,10 @@ FORMS = [
             "delivery_note_number": text_field("The delivery note number"),
             "ship_date": text_field("The date the goods were shipped", date=True),
             "tracking_number": text_field("The carrier's tracking number"),
-            "packages": text_field("How many packages were delivered"),
+            "packages": {"type": "integer", "description": "How many packages were delivered"},
             "received_by": text_field("Who signed for the delivery")}},
         {"delivery_note_number": "DN-55120", "ship_date": "2026-09-24", "tracking_number": "HFP-TRK-9917342",
-         "packages": "14", "received_by": "Sam Okafor"},
+         "packages": 14, "received_by": "Sam Okafor"},
     ),
     Form(
         "rcpt-01",

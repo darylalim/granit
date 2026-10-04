@@ -17,7 +17,7 @@
         "description": "The carrier's tracking number"
       },
       "packages": {
-        "type": "string",
+        "type": "integer",
         "description": "How many packages were delivered"
       },
       "received_by": {
@@ -30,7 +30,7 @@
     "delivery_note_number": "DN-55120",
     "ship_date": "2026-09-24",
     "tracking_number": "HFP-TRK-9917342",
-    "packages": "14",
+    "packages": 14,
     "received_by": "Sam Okafor"
   }
 }

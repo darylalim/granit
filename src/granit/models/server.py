@@ -18,7 +18,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Any
 
-from granit.config import LLM_HOST, LLM_MLX_CACHE_LIMIT_GB, LLM_PORT, LLM_PROMPT_CACHE_BYTES
+from granit.config import (
+    LLM_HOST,
+    LLM_MAX_OUTPUT_TOKENS,
+    LLM_MLX_CACHE_LIMIT_GB,
+    LLM_PORT,
+    LLM_PROMPT_CACHE_BYTES,
+)
 
 
 @dataclass(frozen=True)
@@ -26,7 +32,7 @@ class ServerConfig:
     model_path: Path
     host: str = LLM_HOST
     port: int = LLM_PORT
-    max_tokens: int = 2048
+    max_tokens: int = LLM_MAX_OUTPUT_TOKENS
     # Memory limits measured in M1 (PLAN.md §3.3). None means mlx-lm's own default (unbounded).
     prompt_cache_bytes: str | None = LLM_PROMPT_CACHE_BYTES
     mlx_cache_limit_gb: float | None = LLM_MLX_CACHE_LIMIT_GB

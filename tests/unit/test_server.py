@@ -105,6 +105,10 @@ def test_server_uses_granits_memory_limits_by_default(tmp_path: Path) -> None:
     assert cmd[:3] == [sys.executable, "-m", "granit.models.mlx_server"]
     assert cmd[cmd.index("--mlx-cache-limit-gb") + 1] == str(config.LLM_MLX_CACHE_LIMIT_GB)
     assert cmd[cmd.index("--prompt-cache-bytes") + 1] == config.LLM_PROMPT_CACHE_BYTES
+    assert cmd[cmd.index("--max-tokens") + 1] == str(config.LLM_MAX_OUTPUT_TOKENS)
+    assert (
+        config.LLM_PROMPT_BUDGET_TOKENS + config.LLM_MAX_OUTPUT_TOKENS == config.LLM_CONTEXT_TOKENS
+    )
 
 
 def test_server_can_run_with_mlx_lm_defaults(tmp_path: Path) -> None:

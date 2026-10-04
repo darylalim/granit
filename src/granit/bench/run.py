@@ -5,7 +5,7 @@ Scenarios
 - ``phase-b``: mlx_lm.server (granit's memory limits) startup, decode tok/s, prefill / TTFT by context size, plus the UI backend's
   embedder + reranker + vector matrix running alongside it (their peaks add up to Phase B)
 - ``prompt-cache``: server memory over 10 distinct RAG prompts, mlx-lm defaults vs granit's limits
-- ``long-context``: one ~30K-token request on a fresh server, mlx-lm defaults vs granit's limits
+- ``long-context``: one request filling the context cap on a fresh server, mlx-lm defaults vs granit's limits
 - ``phase-c``: Guardian q8 no-think time per check
 - ``switches``: B→A and A→B switch time, as the phase manager will do it
 """
@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from granit.bench.stats import budget
-from granit.config import HUB_MODELS, PROJECT_ROOT
+from granit.config import HUB_MODELS, LLM_CONTEXT_TOKENS, PROJECT_ROOT
 from granit.fixtures import synthetic_text
 from granit.models.download import local_snapshot
 from granit.models.memory import footprint
@@ -38,7 +38,9 @@ RESULTS_DIR = PROJECT_ROOT / "bench" / "results"
 CHARS_PER_TOKEN = (
     3.75  # measured on synthetic_text with the Granite tokenizer (8,488 tokens / 32,000 chars)
 )
-CONTEXT_TOKENS = (1_000, 4_000, 8_000, 16_000, 30_000)
+# The last size fills the context cap (leaving room for the 128 output tokens the bench asks for): the worst case.
+AT_LIMIT_TOKENS = LLM_CONTEXT_TOKENS - 512  # margin: the chars-per-token estimate runs ~0.6% long
+CONTEXT_TOKENS = (1_000, 4_000, 8_000, AT_LIMIT_TOKENS)
 QUICK_CONTEXT_TOKENS = (1_000, 4_000)
 RAG_PROMPT_TOKENS = 3_000  # 8 chunks × ~300 tokens + question + instructions
 
@@ -234,12 +236,11 @@ def prompt_cache(bench: Bench) -> Details:
 
 
 def long_context(bench: Bench) -> Details:
-    """One ~30K-token request on a fresh server: the single-request peak, mlx-lm defaults vs granit's limits.
-
-    (An earlier M1 run showed --prefill-step-size 512 vs 2048 makes no difference to this peak.)
+    """One request filling the context cap on a fresh server: the single-request peak, mlx-lm defaults vs
+    granit's limits. (M1 also showed --prefill-step-size 512 vs 2048 makes no difference to this peak.)
     """
     out: Details = {}
-    tokens = 8_000 if bench.quick else 30_000
+    tokens = 8_000 if bench.quick else AT_LIMIT_TOKENS
     for label, mlx_lm_defaults in (("mlx_lm_defaults", True), ("granit", False)):
         with bench.server(f"long-{label}", mlx_lm_defaults) as server:
             server.wait_ready()

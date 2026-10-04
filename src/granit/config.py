@@ -14,7 +14,12 @@ DATA_DIR = Path(os.environ.get("GRANIT_DATA_DIR", PROJECT_ROOT / "data"))
 MODELS_DIR = Path(os.environ.get("GRANIT_MODELS_DIR", PROJECT_ROOT / "models"))
 DB_PATH = DATA_DIR / "granit.db"
 
-LLM_CONTEXT_TOKENS = 32_768
+# One LLM request (prompt + output) is capped at 16K tokens (PLAN.md §3.3, decided after M1): it keeps Phase B
+# around 20 GB instead of 23.5 GB at 30K, and a 30K prompt alone takes ~2.3 min to read. Longer inputs (meetings over
+# about an hour) are summarized in sections. mlx_lm.server doesn't enforce this; the prompt builder (M5) must.
+LLM_CONTEXT_TOKENS = 16_384
+LLM_MAX_OUTPUT_TOKENS = 2_048
+LLM_PROMPT_BUDGET_TOKENS = LLM_CONTEXT_TOKENS - LLM_MAX_OUTPUT_TOKENS
 # Phase B: mlx_lm.server on localhost only (never reachable from the network).
 LLM_HOST = "127.0.0.1"
 LLM_PORT = int(os.environ.get("GRANIT_LLM_PORT", "8765"))

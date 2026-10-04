@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from granit import fixtures
+from granit import config, fixtures
 from granit.bench import run, stats, workers
 from granit.models import memory
 
@@ -57,6 +57,12 @@ def test_rag_messages_are_distinct_and_sized() -> None:
     assert a != b  # distinct prompts, so the server's prompt cache can't hit
     chars = len(a[0]["content"])
     assert 1000 * run.CHARS_PER_TOKEN <= chars <= 1000 * run.CHARS_PER_TOKEN + 800
+
+
+def test_bench_measures_up_to_but_not_past_the_context_cap() -> None:
+    assert max(run.CONTEXT_TOKENS) == run.AT_LIMIT_TOKENS
+    # prompt + the 128 output tokens the bench asks for, with ~1% slack for the token estimate
+    assert run.AT_LIMIT_TOKENS * 1.01 + 128 <= config.LLM_CONTEXT_TOKENS
 
 
 def test_scenarios_and_workers_are_registered() -> None:

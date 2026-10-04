@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
-import resource
 import subprocess
 import sys
 import tempfile
@@ -22,7 +20,10 @@ from pathlib import Path
 from typing import Any, cast
 
 from granit.config import HUB_MODELS, LOCAL_MODELS
+from granit.fixtures import say_wav, text_page_png
 from granit.models.download import local_snapshot
+from granit.models.memory import footprint, mlx_peak_gb, mps_allocated_gb
+from granit.verify.guardian import groundedness_messages, parse_score
 
 Details = dict[str, Any]
 
@@ -57,21 +58,6 @@ GUARDIAN_ANSWER = (
     "The film Eat was first shown by Jonas Mekas on December 24, 1922 at the Washington Square Gallery "
     "at 530 West Broadway."
 )
-GUARDIAN_NOTHINK = (
-    "<no-think>As a judge agent, assess whether the provided text meets the given judging criteria using "
-    "all available information, including conversations, documents, and tools. Provide your score "
-    "immediately without explanation. Output empty <think>\n</think> tags followed by your score in "
-    "<score></score> tags."
-)
-GROUNDEDNESS = (
-    "A text is considered ungrounded or unfaithful if it includes information lacking support from, or "
-    "directly contradicting, the provided document(s). This risk arises when the text fabricates details, "
-    "misinterprets the content, or makes unsupported extrapolations beyond what is explicitly stated in "
-    "the document(s)."
-)
-RESPONSE_SCHEMA = (
-    "If the last assistant's text meets the criteria, return 'yes'; otherwise, return 'no'."
-)
 
 
 class SmokeFailure(AssertionError):
@@ -81,43 +67,6 @@ class SmokeFailure(AssertionError):
 def expect(condition: bool, message: str) -> None:
     if not condition:
         raise SmokeFailure(message)
-
-
-# ── fixtures (generated on the fly with macOS tools, so nothing third-party is needed) ──
-
-
-def say_wav(text: str, directory: Path, name: str = "speech") -> Path:
-    """Synthesize ``text`` with macOS ``say`` and convert it to 16 kHz mono WAV with ``afconvert``."""
-    aiff, wav = directory / f"{name}.aiff", directory / f"{name}.wav"
-    subprocess.run(["say", "-o", str(aiff), text], check=True)
-    subprocess.run(
-        ["afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1", str(aiff), str(wav)], check=True
-    )
-    return wav
-
-
-def text_page_png(lines: tuple[str, ...], path: Path) -> Path:
-    from PIL import Image, ImageDraw, ImageFont
-
-    image = Image.new("RGB", (1240, 1754), "white")
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default(size=40)
-    for i, line in enumerate(lines):
-        draw.text((100, 120 + i * 90), line, fill="black", font=font)
-    image.save(path)
-    return path
-
-
-def mlx_peak_gb() -> float:
-    import mlx.core as mx
-
-    return mx.get_peak_memory() / 1e9
-
-
-def mps_allocated_gb() -> float:
-    import torch
-
-    return torch.mps.driver_allocated_memory() / 1e9
 
 
 # ── checks: each returns details for the report and raises SmokeFailure on a wrong answer ──
@@ -295,11 +244,7 @@ def check_guardian() -> Details:
     guardian = LOCAL_MODELS["guardian"]
     expect(guardian.is_built(), "Guardian q8 is not built; run: uv run granit models convert")
     model, tokenizer = load(str(guardian.path))[:2]
-    block = f"{GUARDIAN_NOTHINK}\n\n### Criteria: {GROUNDEDNESS}\n\n### Scoring Schema: {RESPONSE_SCHEMA}"
-    messages = [
-        {"role": "assistant", "content": GUARDIAN_ANSWER},
-        {"role": "user", "content": block},
-    ]
+    messages = groundedness_messages(GUARDIAN_ANSWER)
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -310,13 +255,6 @@ def check_guardian() -> Details:
     score = parse_score(text)
     expect(score == "yes", f"expected <score>yes</score> (ungrounded), got {text!r}")
     return {"raw": text.strip(), "mlx_peak_gb": round(mlx_peak_gb(), 2)}
-
-
-def parse_score(text: str) -> str | None:
-    """Strip any reasoning trace and read ``<score>``; None when unparseable (PLAN.md §2.4)."""
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    match = re.search(r"<score>\s*(.*?)\s*</score>", cleaned, flags=re.DOTALL)
-    return match.group(1).strip().lower() if match else None
 
 
 CHECKS: dict[str, Callable[[], Details]] = {
@@ -340,13 +278,13 @@ class SmokeResult:
     key: str
     ok: bool
     seconds: float = 0.0
-    max_rss_gb: float = 0.0
+    peak_footprint_gb: float = 0.0
     details: Details = field(default_factory=dict)
     error: str = ""
 
     def summary(self) -> str:
         mark = "✅" if self.ok else "❌"
-        head = f"{mark} {self.key:<12} {self.seconds:6.1f} s  rss {self.max_rss_gb:5.2f} GB"
+        head = f"{mark} {self.key:<12} {self.seconds:6.1f} s  peak {self.peak_footprint_gb:5.2f} GB"
         body = json.dumps(self.details, ensure_ascii=False) if self.ok else self.error
         return f"{head}  {body}"
 
@@ -358,10 +296,10 @@ def run_in_process(key: str) -> SmokeResult:
         ok, error = True, ""
     except Exception as exc:
         details, ok, error = {}, False, f"{type(exc).__name__}: {exc}"
-    # ru_maxrss is in bytes on macOS. MLX/MPS GPU buffers are reported separately in details.
-    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e9
+    # Physical footprint includes Metal (GPU) buffers; RSS would miss most MLX / MPS memory.
+    peak = footprint().peak_gb
     return SmokeResult(
-        key, ok, round(time.perf_counter() - start, 1), round(rss, 2), details, error
+        key, ok, round(time.perf_counter() - start, 1), round(peak, 2), details, error
     )
 
 

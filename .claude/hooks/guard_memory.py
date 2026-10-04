@@ -16,7 +16,7 @@ MODEL_CLI_MODEL_ACTIONS = {"smoke", "convert"}
 MLX_PREFIXES = ("mlx_lm", "mlx_vlm", "mlx_audio")
 # Extended regex for `pgrep -f`: processes that hold a phase's models in memory.
 RUNNING_PHASE_PATTERN = (
-    r"mlx_lm[. ]server|granit\.ingest\.worker|granit\.verify\.worker|granit\.models\.smoke"
+    r"mlx_lm[. ]server|granit\.ingest\.worker|granit\.verify\.worker|granit\.models\.smoke|granit\.bench\.workers|granit\.models\.mlx_server"
     r"|granit (ingest|eval|verify|bench)|granit models (smoke|convert)"
 )
 
@@ -37,7 +37,8 @@ def loads_models(argv: list[str]) -> bool:
             return True
         return rest[:1] == ["models"] and rest[1:2] != [] and rest[1] in MODEL_CLI_MODEL_ACTIONS
     if module and (
-        module.split(".")[0] in MLX_PREFIXES or module.startswith("granit.models.smoke")
+        module.split(".")[0] in MLX_PREFIXES
+        or module.startswith(("granit.models.smoke", "granit.models.mlx_server", "granit.bench"))
     ):
         return True
     return cmd.split(".")[0] in MLX_PREFIXES

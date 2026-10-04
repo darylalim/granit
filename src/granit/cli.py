@@ -93,7 +93,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     smoke.add_argument("keys", nargs="*", choices=[[], *CHECKS], metavar="KEY")
     smoke.set_defaults(func=_models_smoke)
+
+    from granit.bench.run import SCENARIOS
+
+    bench = commands.add_parser(
+        "bench", help="M1 benchmarks: speed, memory per phase, phase switch time (~15 min)"
+    )
+    bench.add_argument("scenarios", nargs="*", choices=[[], *SCENARIOS], metavar="SCENARIO")
+    bench.add_argument(
+        "--quick", action="store_true", help="smaller workloads to check the harness"
+    )
+    bench.set_defaults(func=_bench)
     return parser
+
+
+def _bench(args: argparse.Namespace) -> int:
+    from granit.bench.run import SCENARIOS, run, summary_lines
+
+    report, path = run(args.scenarios or list(SCENARIOS), quick=args.quick)
+    print("\n".join(summary_lines(report)))
+    print(f"results: {path}")
+    return 0 if all(c["within_limit"] for c in report["budget"]) else 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -15,6 +15,13 @@ MODELS_DIR = Path(os.environ.get("GRANIT_MODELS_DIR", PROJECT_ROOT / "models"))
 DB_PATH = DATA_DIR / "granit.db"
 
 LLM_CONTEXT_TOKENS = 32_768
+# Phase B: mlx_lm.server on localhost only (never reachable from the network).
+LLM_HOST = "127.0.0.1"
+LLM_PORT = int(os.environ.get("GRANIT_LLM_PORT", "8765"))
+# Phase B memory limits (measured in M1, PLAN.md §3.3). mlx-lm's defaults keep up to 10 prompt KV caches with no
+# byte limit, and MLX keeps freed KV-growth buffers cached; either can push Phase B past the GPU limit.
+LLM_PROMPT_CACHE_BYTES = "2GB"
+LLM_MLX_CACHE_LIMIT_GB = 1.0
 GUARDIAN_CONTEXT_TOKENS = 8_192
 EMBEDDING_DIM = 768
 

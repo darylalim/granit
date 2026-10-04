@@ -1,0 +1,51 @@
+{
+  "system": {
+    "date": "2026-10-04T17:33:00+00:00",
+    "git_sha": "065dd80",
+    "chip": "Apple M2 Max",
+    "memory_gb": 32,
+    "macos": "26.6.2",
+    "gpu_working_set_limit_gb": 26.8,
+    "versions": {
+      "mlx": "0.32.3",
+      "mlx-lm": "0.32.0",
+      "mlx-vlm": "0.7.4",
+      "mlx-audio": "0.5.7",
+      "docling": "2.133.0",
+      "torch": "2.14.1"
+    },
+    "models": {
+      "speech": "947f59af40",
+      "vad": "2ebf4a5e10",
+      "docling": "e9939db25d",
+      "vision": "37d591f063",
+      "llm": "a60999a162",
+      "embedding": "47ea694b25",
+      "reranker": "d09d3d6971",
+      "guardian-source": "ab01ccca5d"
+    }
+  },
+  "quick": false,
+  "results": {
+    "long-context": {
+      "step_2048": {
+        "prompt_tokens": 30160,
+        "ttft_s": 142.85,
+        "prefill_tps": 211.1,
+        "decode_tps": 15.5,
+        "peak_footprint_gb": 24.72
+      },
+      "step_512": {
+        "prompt_tokens": 30160,
+        "ttft_s": 147.63,
+        "prefill_tps": 204.2,
+        "decode_tps": 15.5,
+        "peak_footprint_gb": 24.72
+      }
+    }
+  },
+  "seconds": {
+    "long-context": 319.2
+  },
+  "budget": []
+}

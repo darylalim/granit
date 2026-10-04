@@ -1,0 +1,338 @@
+{
+  "system": {
+    "date": "2026-10-04T17:19:05+00:00",
+    "git_sha": "065dd80",
+    "chip": "Apple M2 Max",
+    "memory_gb": 32,
+    "macos": "26.6.2",
+    "gpu_working_set_limit_gb": 26.8,
+    "versions": {
+      "mlx": "0.32.3",
+      "mlx-lm": "0.32.0",
+      "mlx-vlm": "0.7.4",
+      "mlx-audio": "0.5.7",
+      "docling": "2.133.0",
+      "torch": "2.14.1"
+    },
+    "models": {
+      "speech": "947f59af40",
+      "vad": "2ebf4a5e10",
+      "docling": "e9939db25d",
+      "vision": "37d591f063",
+      "llm": "a60999a162",
+      "embedding": "47ea694b25",
+      "reranker": "d09d3d6971",
+      "guardian-source": "ab01ccca5d"
+    }
+  },
+  "quick": false,
+  "results": {
+    "phase-a": {
+      "load_s": {
+        "speech": 0.38,
+        "vad": 0.02,
+        "docling": 1.45,
+        "vision": 2.77,
+        "embedding": 0.84,
+        "total": 5.47
+      },
+      "memory_after_load": {
+        "peak_footprint_gb": 11.66,
+        "current_footprint_gb": 11.66
+      },
+      "workload": {
+        "audio": {
+          "audio_s": 112.2,
+          "vad_s": 0.564,
+          "chunks": 5,
+          "transcribe_s": 0.45,
+          "real_time_factor": 0.009,
+          "words": 170
+        },
+        "docling": {
+          "page_s": 2.44,
+          "markdown_chars": 1096
+        },
+        "vision": {
+          "chart2csv": {
+            "seconds": 3.0,
+            "prompt_tokens": 1037,
+            "generation_tokens": 63,
+            "prompt_tps": 670.6,
+            "generation_tps": 44.7
+          },
+          "tables_html": {
+            "seconds": 20.33,
+            "prompt_tokens": 1194,
+            "generation_tokens": 800,
+            "prompt_tps": 657.7,
+            "generation_tps": 43.4
+          }
+        },
+        "embed_chunks": {
+          "chunks": 256,
+          "seconds": 4.5,
+          "chunks_per_s": 56.9
+        }
+      },
+      "memory_by_stage": {
+        "audio": {
+          "current_gb": 13.34,
+          "peak_gb": 13.34
+        },
+        "docling": {
+          "current_gb": 11.75,
+          "peak_gb": 15.23
+        },
+        "vision": {
+          "current_gb": 11.91,
+          "peak_gb": 15.55
+        },
+        "embed_chunks": {
+          "current_gb": 11.87,
+          "peak_gb": 15.55
+        }
+      },
+      "memory": {
+        "peak_footprint_gb": 15.55,
+        "current_footprint_gb": 11.87,
+        "mlx_peak_gb": 11.39,
+        "mps_gb": 10.85
+      }
+    },
+    "phase-b": {
+      "server": {
+        "ready_s": 3.71,
+        "warm_up_s": 3.23,
+        "stop_s": 0.27,
+        "peak_footprint_gb": 25.96
+      },
+      "decode_tps_short_context": 35.7,
+      "contexts": [
+        {
+          "prompt_tokens": 997,
+          "cached_tokens": 8,
+          "ttft_s": 2.88,
+          "prefill_tps": 343.2,
+          "decode_tps": 34.1,
+          "server_footprint_gb": 10.56
+        },
+        {
+          "prompt_tokens": 4104,
+          "cached_tokens": 8,
+          "ttft_s": 12.55,
+          "prefill_tps": 326.5,
+          "decode_tps": 30.5,
+          "server_footprint_gb": 11.6
+        },
+        {
+          "prompt_tokens": 8025,
+          "cached_tokens": 12,
+          "ttft_s": 26.51,
+          "prefill_tps": 302.3,
+          "decode_tps": 26.8,
+          "server_footprint_gb": 13.6
+        },
+        {
+          "prompt_tokens": 16098,
+          "cached_tokens": 8,
+          "ttft_s": 61.37,
+          "prefill_tps": 262.2,
+          "decode_tps": 19.6,
+          "server_footprint_gb": 20.28
+        },
+        {
+          "prompt_tokens": 29433,
+          "cached_tokens": 12,
+          "ttft_s": 137.16,
+          "prefill_tps": 214.5,
+          "decode_tps": 15.3,
+          "server_footprint_gb": 25.87
+        }
+      ],
+      "retrieval": {
+        "load_s": {
+          "embedding": 4.43,
+          "reranker": 0.56
+        },
+        "query_embed": {
+          "n": 30,
+          "p50_ms": 13.3,
+          "p90_ms": 13.89,
+          "min_ms": 13.1,
+          "max_ms": 14.51
+        },
+        "rerank_30_pairs": {
+          "n": 10,
+          "p50_ms": 553.61,
+          "p90_ms": 554.79,
+          "min_ms": 551.36,
+          "max_ms": 556.01
+        },
+        "vector_search_top50": {
+          "150k": {
+            "matrix_fp16_mb": 230.4,
+            "numpy_fp16": {
+              "n": 5,
+              "p50_ms": 181.57,
+              "p90_ms": 201.45,
+              "min_ms": 171.16,
+              "max_ms": 208.26
+            },
+            "numpy_fp32": {
+              "n": 20,
+              "p50_ms": 9.54,
+              "p90_ms": 9.72,
+              "min_ms": 9.38,
+              "max_ms": 9.75
+            },
+            "torch_mps_fp16": {
+              "n": 20,
+              "p50_ms": 1.02,
+              "p90_ms": 1.44,
+              "min_ms": 0.94,
+              "max_ms": 1.61
+            }
+          },
+          "1000k": {
+            "matrix_fp16_mb": 1536.0,
+            "numpy_fp16": {
+              "n": 5,
+              "p50_ms": 1269.06,
+              "p90_ms": 1278.54,
+              "min_ms": 1189.8,
+              "max_ms": 1283.57
+            },
+            "numpy_fp32": {
+              "n": 20,
+              "p50_ms": 60.89,
+              "p90_ms": 62.02,
+              "min_ms": 54.85,
+              "max_ms": 68.45
+            },
+            "torch_mps_fp16": {
+              "n": 20,
+              "p50_ms": 5.2,
+              "p90_ms": 5.66,
+              "min_ms": 4.99,
+              "max_ms": 5.7
+            }
+          }
+        },
+        "memory": {
+          "peak_models_gb": 1.88,
+          "peak_with_150k_matrix_gb": 2.81,
+          "mps_gb": 2.63
+        }
+      },
+      "peak_footprint_gb": 28.77,
+      "peak_note": "server peak + UI-backend retrieval peak (with a 150K-chunk matrix); an upper bound"
+    },
+    "prompt-cache": {
+      "default": {
+        "prompt_cache_bytes": null,
+        "footprint_after_each_gb": [
+          10.83,
+          11.4,
+          11.86,
+          12.92,
+          13.47,
+          13.54,
+          14.56,
+          14.59,
+          15.69,
+          16.2
+        ],
+        "peak_footprint_gb": 16.78
+      },
+      "cap_2GB": {
+        "prompt_cache_bytes": "2GB",
+        "footprint_after_each_gb": [
+          10.84,
+          11.41,
+          11.87,
+          12.93,
+          12.99,
+          12.01,
+          12.45,
+          11.93,
+          12.47,
+          12.48
+        ],
+        "peak_footprint_gb": 14.07
+      }
+    },
+    "phase-c": {
+      "load_s": {
+        "guardian": 3.05
+      },
+      "check_8_chunks": {
+        "n": 10,
+        "p50_ms": 9024.31,
+        "p90_ms": 9318.39,
+        "min_ms": 8644.07,
+        "max_ms": 9410.78,
+        "prompt_tokens": 3018,
+        "prompt_tps": 348.3,
+        "parsed_scores": 10
+      },
+      "check_24_chunks": {
+        "seconds": 26.25,
+        "prompt_tokens": 8239,
+        "score": "yes"
+      },
+      "memory": {
+        "peak_footprint_gb": 12.39,
+        "current_footprint_gb": 10.76,
+        "mlx_peak_gb": 10.91
+      }
+    },
+    "switches": {
+      "cycles": [
+        {
+          "b_to_a_s": 8.94,
+          "a_to_b_s": 6.65,
+          "parts": {
+            "server_stop_s": 0.07,
+            "phase_a_load_s": 8.86,
+            "phase_a_exit_s": 0.72,
+            "server_ready_s": 3.38,
+            "server_warm_up_s": 2.56
+          }
+        },
+        {
+          "b_to_a_s": 7.57,
+          "a_to_b_s": 6.54,
+          "parts": {
+            "server_stop_s": 0.07,
+            "phase_a_load_s": 7.5,
+            "phase_a_exit_s": 0.71,
+            "server_ready_s": 3.28,
+            "server_warm_up_s": 2.54
+          }
+        }
+      ]
+    }
+  },
+  "seconds": {
+    "phase-a": 58.4,
+    "phase-b": 325.7,
+    "prompt-cache": 235.4,
+    "phase-c": 122.9,
+    "switches": 35.4
+  },
+  "budget": [
+    {
+      "line": "\u2705 Phase A: peak 15.6 GB (plan ~12.0 GB, +3.6); 11.2 GB below the 26.8 GB GPU limit",
+      "within_limit": true
+    },
+    {
+      "line": "\u274c Phase B: peak 28.8 GB (plan ~15.8 GB, +13.0); -2.0 GB below the 26.8 GB GPU limit",
+      "within_limit": false
+    },
+    {
+      "line": "\u2705 Phase C: peak 12.4 GB (plan ~10.5 GB, +1.9); 14.4 GB below the 26.8 GB GPU limit",
+      "within_limit": true
+    }
+  ]
+}

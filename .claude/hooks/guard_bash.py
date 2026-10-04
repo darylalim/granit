@@ -68,10 +68,8 @@ def check(argv: list[str], cwd: Path, project: Path) -> str | None:
         return (
             "refusing to recursively delete data/ or models/ (user data / weights); do it yourself"
         )
-    if cmd == "sysctl" and any("iogpu" in a for a in args):
-        return (
-            "no GPU memory-limit tuning: every phase fits the default ~21 GB limit (PLAN.md §3.3)"
-        )
+    if cmd == "sysctl" and any("iogpu" in a and ("=" in a or "-w" in args) for a in args):
+        return "no GPU memory-limit tuning: every phase fits the default GPU memory limit (PLAN.md §3.3)"
     if cmd == "git":
         sub, rest = _git_subcommand(args)
         if sub == "tag" and not _lists_tags(rest):

@@ -22,7 +22,8 @@ uv run ruff format --check && uv run ruff check && uv run ty check src tests && 
 ```
 
 `uv run pytest` runs unit tests only (`-m "not model"`). These need no weights or GPU and take seconds.
-Model tests run on the Mac with `uv run pytest -m model`. Close the app first, because only one phase may hold
+Model tests run on the Mac with `uv run pytest -m model`, and benchmarks with `uv run granit bench`
+(about 15 minutes; run it after model or dependency changes and compare with `bench/results/`). Close the app first, because only one phase may hold
 models at a time.
 
 ## Licensing

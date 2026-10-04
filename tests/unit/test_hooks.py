@@ -70,6 +70,7 @@ BLOCKED = [
     "rm --recursive models",
     "rm -rf .",
     "sudo sysctl iogpu.wired_limit_mb=28000",
+    "sysctl -w iogpu.wired_limit_mb 28000",
     "git tag v0.1.0",
     "git tag -a v1.0.0 -m release",
     "git tag -d v0.1.0",
@@ -91,6 +92,7 @@ ALLOWED = [
     "rm -rf dist build",
     "rm data/granit.db.bak",  # not recursive: a single file is the user's call
     "sysctl hw.memsize",
+    "sysctl iogpu.wired_limit_mb",  # reading the limit is fine
     "git tag",
     "git tag -l 'v0.*'",
     "git tag --list --sort=-v:refname",
@@ -198,6 +200,11 @@ def test_protect_paths_end_to_end(project: Path) -> None:
         "python -m mlx_vlm.generate --model x",
         "python -m mlx_audio.stt.generate --audio a.wav",
         "python -m granit.models.smoke llm",
+        "uv run granit bench",
+        "uv run granit bench phase-b --quick",
+        "python -m granit.bench.workers phase-a --hold",
+        "python -m mlx_lm server --model x",
+        "python -m granit.models.mlx_server --mlx-cache-limit-gb 1 --model x",
     ],
 )
 def test_guard_memory_detects_model_loading(command: str) -> None:

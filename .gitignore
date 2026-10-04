@@ -1,0 +1,50 @@
+# ── granit: user data & model weights (never commit; see PLAN.md §2.3, §3) ──
+# granit.db (+ -wal/-shm), originals, derived/, crops/
+/data/
+# locally converted weights (e.g. Guardian q8)
+/models/
+# Safety net: weight / cache files anywhere in the tree
+*.safetensors
+*.gguf
+*.bin
+*.npy
+*.npz
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# ── Python / uv ──
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# ── Tool caches ──
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+
+# ── Generated at release time (PLAN.md §4.4) ──
+THIRD_PARTY_NOTICES.md
+
+# ── Secrets & local config ──
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.claude/settings.local.json
+
+# ── OS / editors ──
+.DS_Store
+.AppleDouble
+._*
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp

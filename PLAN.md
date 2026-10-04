@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v25 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v26 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v25: M0–M6 done (Streamlit UI); 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v26: M0–M6 done; M7 evaluation built and run on the public set (private set and Guardian check pending).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -90,6 +90,13 @@ instead of a sidebar:** the screenshot check found the sidebar's ~280 px pushed 
 `?source=ID`, per-upload "Accurate tables", re-ingest from the Library, and an AST check that every Markdown call in `app/` escapes
 what it renders (it found 14 unescaped calls on its first run). Measured in Chrome with the real models: Q&A ready 13 s after the
 first visit; an upload with accurate tables → Q&A paused → back in 27 s; answers ~97 characters per line at every width.
+
+**Changes in v26 (M7):** the evaluation harness (`granit eval run|compare|init|label|agreement`) and the public eval set
+(`scripts/make_eval_fixtures.py` → `eval/public/`: 24 files, 31 questions) are built (§4.9). **The first run found that
+Granite-Docling finds some tables but transcribes none of their cells** (an empty `<otsl>`: 6 of 21 tables, including two invoices'
+line items), so their content never reached search; Vision now fills those tables at ingest, and "Accurate tables" now puts
+Vision's cells into the chunks (it only stored them before). Text-layer words missing from the chunks: 33.6 % → 1.3 %. Results
+and the open findings are in §4.9 *First results*; the table default awaits confirmation (§4.9 *Tables*).
 ---
 
 ## 1. Scope (v1)
@@ -552,7 +559,10 @@ of scope (licenses unchecked).
    and Vision `<tables_html>` got **96/96 values right**, but Docling took 3.4 s for the whole page and Vision 29 s for the one table.
    The Vision path is built and tested (`granit convert --vision-tables`). **Decision (after M3): Docling stays the default until M7
    compares both on hard tables** (rule in §4.9: *Tables: Docling vs Vision*). Until then, the M6 Ingest page offers
-   **"Accurate tables (slower)"** per upload, which turns the Vision path on for that document.
+   **"Accurate tables (slower)"** per upload, which turns the Vision path on for that document. **M7 found and fixed silent table
+   loss:** Granite-Docling sometimes returns a table with no cells (an empty `<otsl>`: dense and long tables, and the line items of
+   two invoice layouts). Such tables now always go to Vision, and Vision's cells replace Docling's in the document (and so in the
+   chunks); Docling's own grids are kept in `derived/<id>/docling_tables.json` for the eval.
 5. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
    valid, errors, page, crop, model + revision), ready for the `extractions` table (M4).
 
@@ -1340,8 +1350,49 @@ Granite-Docling.
     reliably at ingest (e.g. scanned pages); otherwise keep Docling.
   - Otherwise → keep Docling as the default.
 - The result and the decision are recorded here and in §3.6; until then the per-upload "Accurate tables (slower)" option covers hard cases.
+- **M7 result (2026-10-04, `eval/results/2026-10-04-b59bdd1-public.json`), mean cell F1 over the 8 tables:**
+
+  | Path | Cell F1 | Seconds per table | Notes |
+  |---|---|---|---|
+  | Docling alone | 0.747 | 1.3 | 0.0 on the dense and the split tables: it found them but emitted no cells |
+  | Vision on every table | 0.925 | 10.6 | 0.50 on line breaks (`1800 Port WayTacoma`), 0.92 borderless |
+  | **Docling, Vision for the tables Docling left empty** (built in M7) | **0.997** | Vision only where needed | only merged headers below 1.0 (0.98, both paths) |
+
+- **Decision pending your confirmation.** Read literally, the rule's first branch says Vision for everything (0.925 vs 0.747, +17.8
+  points), but that gap comes entirely from the empty tables, which are reliably detectable at ingest, the rule's second branch.
+  Recommended: keep `DOCUMENT_VISION_TABLES = False` with the automatic empty-table fallback (best on every table, ~8× cheaper than
+  Vision everywhere). "Accurate tables" stays available per upload.
 
 **`1.0.0` is released only when both sets pass** (§4.3's version plan). Until then, versions stay `0.x`.
+
+#### First results (M7, 2026-10-04, public set)
+
+`eval/results/2026-10-04-b59bdd1-public.json`, reproduced exactly after a fresh re-ingest. 9 minutes end to end (A 220 s, B 203 s, C 110 s).
+
+| Metric | Result | Pass at | |
+|---|---|---|---|
+| Retrieval recall@8 (hybrid + rerank) | **1.000** | ≥ 0.90 | ✅ all four setups 1.000; MRR@8: BM25 0.936, hybrid 0.923, hybrid + rerank 0.914, vectors 0.859 |
+| Fact coverage | 0.885 | ≥ 0.90 | ❌ 2 questions need field values Docling dropped (below), 1 a misheard name ("Pria"), 1 an owner said in the first person |
+| Unanswerable questions declined | **1.000** | ≥ 0.90 | ✅ (2 of 26 answerable questions were declined, both for the dropped values) |
+| Citation precision | 0.957 | | |
+| Guardian groundedness / answer relevance | 0.958 / 0.958 | ≥ 0.90 | informational until the judge check (below) |
+| Extraction field accuracy | 0.935 | ≥ 0.98 | ❌ 4 of 62 fields: `Sam Okator`, a missed `approved_by`, two ISO dates rewritten as `09-05-2026` (flagged invalid, never guessed) |
+| Table cell F1 | **0.997** | ≥ 0.95 | ✅ with the empty-table fallback (Docling alone: 0.747) |
+| Action-item recall | 0.833 | ≥ 0.90 | ❌ "*I'll* post the job ads": no speaker diarization, so no owner |
+| WER | 0.056 | ≤ 0.05 | ❌ vendor-review 0.112: "Northbeam" → "north beam", "Priya" → "pria"; the other two 0.018 and 0.037 |
+| Answer time p50 / p90 | 4.6 / 6.1 s | (recorded) | first token 2.8 / 4.6 s |
+
+**Thresholds are not changed:** every failure above is a real gap, not a measurement problem. Measurement problems found on the way
+were fixed in the harness instead (written amounts like `$16,500` vs spoken words in WER; a misheard owner name counted twice).
+
+**Open findings (next steps, for decision):**
+1. **Granite-Docling drops field values next to their labels** on one invoice layout ("Invoice number:" kept, "GS-2026-0117" gone),
+   not fixable by the table fallback. Proposed: a **text-layer safety net** for digital PDFs (compare Docling's text with the PDF's own
+   text layer and add the missing lines to the page's chunks); scans would need a Vision page pass.
+2. **No speaker diarization:** action items said in the first person have no owner. A v1 limitation (diarization is not in the plan's
+   model set); the summary prompt could ask for "unknown" explicitly.
+3. **Vision rewrites ISO dates** into an ambiguous `MM-DD-YYYY`: validation flags it (as designed); resolving the ambiguity against
+   the page's own text would recover it.
 
 #### Trusting the judge
 
@@ -1468,6 +1519,7 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | The mlx-vlm Vision port could differ from the reference Transformers output (DeepStack injection) | Golden tests against the card's example outputs; compare one sample with Transformers on MPS if needed |
 | Chart detection misses a chart (Vision answers "no") or charts a photo | Yes/no check measured on the card's chart and logo; misses leave the image as a placeholder (no wrong data); M7 public set adds charts of several types |
 | Vision rewrites field values (dates seen in M3) | `format: date` normalization + format check; ambiguous dates flagged, never guessed; M7 field accuracy |
+| Granite-Docling silently drops content (M7: empty tables in 6 of 21; field values on one invoice layout) | Empty tables → Vision at ingest (M7); text-layer coverage measured by the eval; text-layer safety net proposed (§4.9 *First results*) |
 | Tight transformers version window (≥ 5.16, Docling excludes some 5.x) | Commit `uv.lock`; upgrade deliberately |
 | MLX in Streamlit threads | Models only in the worker process / `mlx_lm.server` (by design) |
 | Thinking mode slows answers | **`reasoning_effort: "low"` by default (confirmed in M5)**; per-question toggle in the UI. On a 3K-token RAG prompt: off **rambled to the token limit** (32 s), low gave a short answer in 11 s, full thinking used its whole budget without answering. On the fixture library, low answers in 2–5 s. Known: on some questions low still narrates its reasoning in the answer ("…So answer: 145"); M7's answer checks track it |
@@ -1520,7 +1572,7 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Memory strategy | **Phase switching**: ingest (A: Speech + Docling + Vision bf16, 15.6 GB measured), Q&A (B: 8B q8, **16K context cap**; ~15 GB for RAG, 19.3 GB at the cap, with the 2 GB prompt-cache cap + 1 GB MLX cache limit) and verify (C, v1.1: Guardian q8, 12.4 GB) take turns, under the 26.8 GB GPU limit (§3.3) |
 | LLM context | **16K tokens per request** (prompt ≤ 14,336 + output ≤ 2,048), enforced by the M5 prompt builder; meetings over ~1 hour summarized in sections; fallback `--kv-bits 8` at 32K if M7 shows sectioned summaries miss things |
 | Audio | Decode: miniaudio (WAV/FLAC/MP3/Ogg) + macOS `afconvert` (M4A/AAC/AIFF/CAF), no ffmpeg; **Silero VAD v6 (MIT, via mlx-audio)** splits at pauses into ≤ 30 s chunks; TurboCTC per chunk; timestamped segments |
-| Documents | Granite-Docling via Docling (pypdfium2 page rendering) → Markdown + `document.json`; pictures ≥ 72 pt → Vision yes/no chart check → `<chart2csv>` into `meta.tabular_chart`; tables from Docling unless `DOCUMENT_VISION_TABLES` (per-upload "Accurate tables" in M6; default decided in M7 by the §4.9 rule); forms: VAREX prompt + JSON Schema, dates → ISO 8601 (§3.6) |
+| Documents | Granite-Docling via Docling (pypdfium2 page rendering) → Markdown + `document.json`; pictures ≥ 72 pt → Vision yes/no chart check → `<chart2csv>` into `meta.tabular_chart`; tables from Docling unless `DOCUMENT_VISION_TABLES` (per-upload "Accurate tables"), **with Vision for any table Docling leaves empty (M7)**; default confirmation pending (§4.9); forms: VAREX prompt + JSON Schema, dates → ISO 8601 (§3.6) |
 | Search | **Hybrid + rerank**: SQLite FTS5 BM25 + Granite Embedding English R2 vectors (fp16 matrix on MPS, 1 ms at 150K) → RRF → Granite Reranker English R2 (555 ms for 30 pairs) → top-8; ≈ 90 ms per question on the fixture library (M4) |
 | Storage | **SQLite** (WAL, one transaction per job, versioned schema) + FTS5 over normalized `search_text` (IDs kept whole, words split from punctuation) + trigram ID index + float16 vectors on MPS (sqlite-vec later); files on disk by sha256. Postgres + pgvector only if multi-user |
 | Verification | **Granite Guardian 4.1 8B (local MLX q8)**: M7 evaluation in v1; batch verify job (Phase C) in v1.1; never loaded with the Q&A LLM; no-think; `yes_means` per criterion |
@@ -1534,4 +1586,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Claude Code hooks | H1 format/lint after edits · H2 protected paths · H3 command guards (uv only, no `turboctc-nc`, no GPU-limit tuning) · H4 one phase at a time · H5 quality gate on Stop · H6 session context; shared via `.claude/settings.json` |
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
-| Next step | M7 evaluation: public eval set + harness (retrieval setups, answer checks incl. reasoning narration, extraction field match, table cell F1 Docling vs Vision, WER) |
+| Next step | Confirm the table default (§4.9 *Tables*); your private eval set + 50 Guardian labels (`granit eval init/label/agreement`); then the M7 findings (text-layer safety net first) before 1.0 |

@@ -33,6 +33,15 @@ GROUNDEDNESS = (
     "the document(s)."
 )
 
+ANSWER_RELEVANCE = (
+    "A text is considered inadequate if it fails to address or adequately respond to the posed query. This includes "
+    "providing off-topic information, misinterpreting the query, or omitting key details requested in the query. "
+    "Information, even if factually sound, is irrelevant if it fails to directly answer or meet the specific intent of "
+    "the query."
+)
+# Both are risk definitions: "yes" means the problem is present, so an answer passes on "no".
+CRITERIA = {"groundedness": GROUNDEDNESS, "answer_relevance": ANSWER_RELEVANCE}
+
 
 def guardian_block(criteria: str, *, think: bool = False, schema: str = RESPONSE_SCHEMA) -> str:
     instruction = THINK if think else NO_THINK
@@ -47,6 +56,20 @@ def groundedness_messages(answer: str, question: str | None = None) -> list[dict
     messages.append({"role": "assistant", "content": answer})
     messages.append({"role": "user", "content": guardian_block(GROUNDEDNESS)})
     return messages
+
+
+def judge_messages(criterion: str, question: str, answer: str) -> list[dict[str, Any]]:
+    """A question and its answer, judged on one of ``CRITERIA`` (pass retrieved chunks as ``documents=``)."""
+    return [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": answer},
+        {"role": "user", "content": guardian_block(CRITERIA[criterion])},
+    ]
+
+
+def passed(score: str | None) -> bool | None:
+    """Risk criteria: "no" (problem absent) passes, "yes" fails, anything else is an error (None)."""
+    return {"no": True, "yes": False}.get(score or "")
 
 
 def parse_score(text: str) -> str | None:

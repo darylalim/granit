@@ -14,6 +14,9 @@ IGNORED = [
     "data/granit.db-wal",
     "data/derived/abc/crops/p3_table1.png",
     "data/eval/questions.yaml",
+    "data/eval/files/my-invoice.pdf",
+    "data/eval/results/2026-10-05-abc-private.json",
+    "data/eval/libraries/public/granit.db",
     "models/granite-guardian-4.1-8b-q8-mlx/model.safetensors",
     "src/stray.gguf",
     "tests/weights.safetensors",
@@ -51,6 +54,11 @@ COMMITTED = [
     "tests/fixtures/a.wav",
     "eval/public/questions.yaml",
     "eval/results/2026-10-04-abc-public.json",
+    "eval/public/files/invoices/inv-01.pdf",
+    "eval/public/files/forms/rcpt-01.png",
+    "eval/public/files/meetings/vendor-review.m4a",
+    "eval/public/tables/split-pages.json",
+    "eval/public/judge_agreement.json",
 ]
 
 pytestmark = pytest.mark.skipif(

@@ -1,0 +1,42 @@
+{
+  "file": "files/forms/po-01.pdf",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "po_number": {
+        "type": "string",
+        "description": "The purchase order number"
+      },
+      "order_date": {
+        "type": "string",
+        "description": "The date the order was placed",
+        "format": "date"
+      },
+      "supplier_name": {
+        "type": "string",
+        "description": "The supplier the order is placed with"
+      },
+      "delivery_date": {
+        "type": "string",
+        "description": "The requested delivery date",
+        "format": "date"
+      },
+      "total_amount": {
+        "type": "string",
+        "description": "The order total, with currency"
+      },
+      "approved_by": {
+        "type": "string",
+        "description": "Who approved the order"
+      }
+    }
+  },
+  "expected": {
+    "po_number": "PO-48455",
+    "order_date": "2026-09-10",
+    "supplier_name": "Harbor Freight Partners",
+    "delivery_date": "2026-09-30",
+    "total_amount": "$22,750.00",
+    "approved_by": "Priya Raman"
+  }
+}

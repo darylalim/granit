@@ -1,0 +1,51 @@
+{
+  "file": "files/invoices/inv-02.pdf",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "invoice_number": {
+        "type": "string",
+        "description": "The invoice number"
+      },
+      "invoice_date": {
+        "type": "string",
+        "format": "date",
+        "description": "The date the invoice was issued"
+      },
+      "due_date": {
+        "type": "string",
+        "format": "date",
+        "description": "The date payment is due"
+      },
+      "vendor_name": {
+        "type": "string",
+        "description": "The company that issued the invoice"
+      },
+      "customer_name": {
+        "type": "string",
+        "description": "The company being billed"
+      },
+      "total_amount": {
+        "type": "string",
+        "description": "The total amount due, with currency"
+      },
+      "purchase_order": {
+        "type": "string",
+        "description": "The customer's purchase order number"
+      }
+    },
+    "required": [
+      "invoice_number",
+      "total_amount"
+    ]
+  },
+  "expected": {
+    "invoice_number": "BOS-88412",
+    "invoice_date": "2026-08-11",
+    "due_date": "2026-08-25",
+    "vendor_name": "Bluefin Office Supplies",
+    "customer_name": "Northwind Logistics Ltd.",
+    "total_amount": "$1,318.40",
+    "purchase_order": null
+  }
+}

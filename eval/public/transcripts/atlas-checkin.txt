@@ -1,0 +1,2 @@
+file: files/meetings/atlas-checkin.m4a
+Where are we on Project Atlas? The data migration slipped, so go-live moves to November third. We have spent two hundred sixty eight thousand five hundred dollars of the four hundred ten thousand dollar budget. Sam, please update the barcode scanner firmware before go-live. Marcus, tell the key customers about the new date this week. Sure, I'll email them tomorrow.

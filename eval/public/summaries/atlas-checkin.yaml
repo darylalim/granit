@@ -1,0 +1,10 @@
+file: files/meetings/atlas-checkin.m4a
+action_items:
+- owner: Sam
+  task: update the barcode scanner firmware
+  due: before go-live
+- owner: Marcus
+  task: tell the key customers about the new go-live date
+  due: this week
+decisions:
+- Go-live moves to November 3

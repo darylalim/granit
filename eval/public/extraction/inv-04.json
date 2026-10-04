@@ -1,0 +1,51 @@
+{
+  "file": "files/invoices/inv-04.pdf",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "invoice_number": {
+        "type": "string",
+        "description": "The invoice number"
+      },
+      "invoice_date": {
+        "type": "string",
+        "format": "date",
+        "description": "The date the invoice was issued"
+      },
+      "due_date": {
+        "type": "string",
+        "format": "date",
+        "description": "The date payment is due"
+      },
+      "vendor_name": {
+        "type": "string",
+        "description": "The company that issued the invoice"
+      },
+      "customer_name": {
+        "type": "string",
+        "description": "The company being billed"
+      },
+      "total_amount": {
+        "type": "string",
+        "description": "The total amount due, with currency"
+      },
+      "purchase_order": {
+        "type": "string",
+        "description": "The customer's purchase order number"
+      }
+    },
+    "required": [
+      "invoice_number",
+      "total_amount"
+    ]
+  },
+  "expected": {
+    "invoice_number": "HFP-2026-551",
+    "invoice_date": "2026-09-18",
+    "due_date": "2026-10-18",
+    "vendor_name": "Harbor Freight Partners",
+    "customer_name": "Northwind Logistics Ltd.",
+    "total_amount": "$22,750.00",
+    "purchase_order": "PO-48455"
+  }
+}

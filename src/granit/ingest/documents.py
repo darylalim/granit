@@ -110,6 +110,14 @@ def is_large_enough(item: Any, minimum: float = MIN_PICTURE_SIZE) -> bool:
     return min(abs(box.width), abs(box.height)) >= minimum
 
 
+def drop_images(doc: Any) -> None:
+    """Remove page and picture images Docling embeds as base64 (~80 KB per scanned page)."""
+    for page in doc.pages.values():
+        page.image = None
+    for picture in doc.pictures:
+        picture.image = None
+
+
 class PageImages:
     """Renders pages on demand for cropping: PDFs via pypdfium2 at ``scale``, images as they are. Keeps one page."""
 
@@ -265,6 +273,9 @@ class DocumentIngestor:
         finally:
             pages.close()
 
+        drop_images(
+            doc
+        )  # crops are saved separately; embedded base64 pages would bloat document.json
         markdown = doc.export_to_markdown()
         document = doc.export_to_dict()
         (out_dir / "document.md").write_text(markdown)

@@ -15,6 +15,9 @@ uv run granit models list|download|convert|smoke
 uv run granit transcribe FILE… [--json DIR]  # audio → timestamped segments (M2)
 uv run granit convert FILE… [--out DIR] [--vision-tables]  # PDF/image → Markdown + chart data (M3)
 uv run granit extract FILE --schema S.json  # form fields via Granite Vision, validated (M3)
+uv run granit ingest FILE… [--data DIR]  # add to the library + run the Phase A worker (M4)
+uv run granit search "question" [--mode bm25|vectors|hybrid|hybrid+rerank] [--json]  # cited hits + trace (M4)
+uv run granit sources  # the library
 uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
 

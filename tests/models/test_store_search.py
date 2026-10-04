@@ -7,13 +7,8 @@ Thresholds: the expected source/element within the top 3; memory and latency cei
 
 from __future__ import annotations
 
-import os
-import re
 import statistics
-import subprocess
-import sys
 import time
-from collections.abc import Iterator
 
 import pytest
 
@@ -22,44 +17,14 @@ from granit.search.hybrid import Hit, Searcher
 from granit.search.rerank import Reranker
 from granit.search.vectors import VectorIndex
 from granit.store.db import Store
-from tests.conftest import ROOT
+from tests.models.conftest import LIBRARY_FILES
 
 pytestmark = pytest.mark.model
 
-FIXTURES = ROOT / "tests" / "fixtures"
-FILES = [
-    FIXTURES / "audio" / "meeting.flac",
-    FIXTURES / "audio" / "vad_pauses.wav",
-    FIXTURES / "documents" / "report.pdf",
-    FIXTURES / "documents" / "memo.pdf",
-    FIXTURES / "documents" / "invoice.png",
-]
+FILES = LIBRARY_FILES
 TOP = 3
 MAX_PHASE_A_GB = 16.0  # M1 measured 15.6 GB without an MLX cache limit; the worker sets one
 MAX_SEARCH_P50_MS = 300  # M4 measured ~90 ms for hybrid + rerank on this library
-
-
-@pytest.fixture(scope="module")
-def library(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Store, float]]:
-    """Ingest with `granit ingest` in its own process, as the Phase A worker runs in production.
-
-    (Measuring in the pytest process would report the whole test session's peak: earlier modules load other models.)
-    """
-    data = tmp_path_factory.mktemp("library")
-    env = {**os.environ, "HF_HUB_OFFLINE": "1"}
-    proc = subprocess.run(
-        [sys.executable, "-m", "granit.cli", "ingest", "--data", str(data), *map(str, FILES)],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=900,
-    )
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    match = re.search(r"peak memory ([\d.]+) GB", proc.stdout)
-    assert match, proc.stdout
-    store = Store(data)
-    yield store, float(match.group(1))
-    store.close()
 
 
 @pytest.fixture(scope="module")
@@ -77,7 +42,9 @@ def where(hits: list[Hit]) -> list[tuple[str, str]]:
 
 def test_every_file_is_ingested_within_the_memory_budget(library: tuple[Store, float]) -> None:
     store, peak_gb = library
-    assert [s.status for s in store.sources()] == ["ready"] * len(FILES)
+    names = {f.name for f in FILES}
+    assert sorted(s.name for s in store.sources() if s.name in names) == sorted(names)
+    assert all(s.status == "ready" for s in store.sources() if s.name in names)
     assert peak_gb <= MAX_PHASE_A_GB
     counts = dict(
         store.conn.execute("SELECT element, count(*) FROM chunks GROUP BY element").fetchall()

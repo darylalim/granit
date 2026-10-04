@@ -18,6 +18,8 @@ uv run granit extract FILE --schema S.json  # form fields via Granite Vision, va
 uv run granit ingest FILE… [--data DIR]  # add to the library + run the Phase A worker (M4)
 uv run granit search "question" [--mode bm25|vectors|hybrid|hybrid+rerank] [--json]  # cited hits + trace (M4)
 uv run granit sources  # the library
+uv run granit ask "question" [--thinking off|low|on]  # cited answer (M5; starts Q&A if needed)
+uv run granit meeting SOURCE  # meeting summary JSON (M5)
 uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
 
@@ -31,6 +33,7 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **Lazy imports:** `mlx*`, `torch`, `sentence_transformers`, `transformers`, `docling` are imported inside functions only (`test_lazy_imports.py`). Unit tests use fakes; no weights or GPU in CI (`HF_HUB_OFFLINE=1`).
 - **One phase at a time** (PLAN.md §2.1): ingest (A), Q&A (B) or verify (C). Never load models while `mlx_lm.server` or a worker runs (hook H4). Memory is freed by ending processes.
 - **Phase B memory limits:** start the LLM server via `granit.models.server.ServerConfig` (2 GB prompt-cache cap + 1 GB MLX cache limit, PLAN.md §3.3); mlx-lm's defaults exceed the GPU limit at long contexts.
+- **Phases:** the UI talks to the LLM only through `PhaseManager` (`models/phases.py`): wrap each answer in `phases.chat()`, call `tick()` periodically, `process_now()` for the button. Never start `mlx_lm.server` or the worker directly from UI code.
 - **No models in the Streamlit process**, except the query embedder + reranker behind a lock (PLAN.md §2.2).
 - **Never touch** `data/` (user data) or `models/` (weights). Both are gitignored and protected by hook H2.
 - **Releases come only from CI** (PLAN.md §4.3): bump with `uv version --bump …`, merge a PR. No local tags or `gh release`.

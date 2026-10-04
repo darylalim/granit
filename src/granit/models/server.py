@@ -13,7 +13,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Any
@@ -131,12 +131,19 @@ class LLMServer:
 
 @dataclass(frozen=True)
 class Completion:
-    text: str
+    content: str  # the answer
+    reasoning: str  # the model's thinking (Granite 4.2 streams it separately as `reasoning`)
     prompt_tokens: int
     completion_tokens: int
     cached_tokens: int
-    ttft_s: float  # time to first streamed token (≈ prefill time)
+    ttft_s: float  # time to the first streamed token of either kind (≈ prefill time)
     total_s: float
+    first_content_s: float | None = None  # time to the first *answer* token (after any thinking)
+
+    @property
+    def text(self) -> str:
+        """Everything generated (thinking + answer), as the M1 bench counts it."""
+        return self.reasoning + self.content
 
     @property
     def decode_tps(self) -> float:
@@ -149,17 +156,23 @@ class Completion:
         return uncached / self.ttft_s if self.ttft_s > 0 else 0.0
 
 
+Delta = tuple[str, str]  # ("reasoning" | "content", text)
+
+
 def stream_chat(
     base_url: str,
     messages: list[dict[str, Any]],
     *,
     max_tokens: int = 256,
     enable_thinking: bool | None = None,
+    template_kwargs: dict[str, Any] | None = None,
+    on_delta: Callable[[Delta], None] | None = None,
     timeout: float = 600,
 ) -> Completion:
-    """POST a streaming chat completion (OpenAI API) and time it. Counts reasoning and content tokens alike.
+    """POST a streaming chat completion (OpenAI API) at temperature 0 and time it.
 
-    ``enable_thinking=None`` keeps the model's default (Granite 4.2 thinks unless told not to).
+    ``enable_thinking`` (shorthand) or ``template_kwargs`` (e.g. ``{"reasoning_effort": "low"}``) go to the chat template;
+    neither keeps the model's default (Granite 4.2 thinks unless told not to). ``on_delta`` sees every streamed piece.
     """
     body: dict[str, Any] = {
         "messages": messages,
@@ -168,8 +181,11 @@ def stream_chat(
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    kwargs = dict(template_kwargs or {})
     if enable_thinking is not None:
-        body["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+        kwargs["enable_thinking"] = enable_thinking
+    if kwargs:
+        body["chat_template_kwargs"] = kwargs
     request = urllib.request.Request(
         f"{base_url}/v1/chat/completions",
         data=json.dumps(body).encode(),
@@ -177,7 +193,9 @@ def stream_chat(
     )
     start = time.perf_counter()
     first: float | None = None
-    parts: list[str] = []
+    first_content: float | None = None
+    content: list[str] = []
+    reasoning: list[str] = []
     usage: dict[str, Any] = {}
     with urllib.request.urlopen(request, timeout=timeout) as response:
         for event in _sse_events(response):
@@ -185,19 +203,28 @@ def stream_chat(
                 usage = event["usage"]
             for choice in event.get("choices") or []:
                 delta = choice.get("delta") or {}
-                piece = (delta.get("content") or "") + (delta.get("reasoning") or "")
-                if piece:
-                    first = first or time.perf_counter()
+                for kind, parts in (("reasoning", reasoning), ("content", content)):
+                    piece = delta.get(kind) or ""
+                    if not piece:
+                        continue
+                    now = time.perf_counter()
+                    first = first or now
+                    if kind == "content":
+                        first_content = first_content or now
                     parts.append(piece)
+                    if on_delta:
+                        on_delta((kind, piece))
     end = time.perf_counter()
     details = usage.get("prompt_tokens_details") or {}
     return Completion(
-        text="".join(parts),
+        content="".join(content),
+        reasoning="".join(reasoning),
         prompt_tokens=int(usage.get("prompt_tokens", 0)),
         completion_tokens=int(usage.get("completion_tokens", 0)),
         cached_tokens=int(details.get("cached_tokens", 0)),
         ttft_s=(first or end) - start,
         total_s=end - start,
+        first_content_s=(first_content - start) if first_content else None,
     )
 
 

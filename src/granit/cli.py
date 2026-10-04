@@ -5,7 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -153,6 +154,24 @@ def build_parser() -> argparse.ArgumentParser:
     sources = commands.add_parser("sources", help="list the library: files, status, chunks")
     sources.add_argument("--data", type=Path, help=data_help)
     sources.set_defaults(func=_sources)
+
+    ask = commands.add_parser(
+        "ask", help="answer a question from the library, with citations (Phase B)"
+    )
+    ask.add_argument("question")
+    ask.add_argument("--thinking", default="low", choices=["off", "low", "on"])
+    ask.add_argument(
+        "--mode", default="hybrid+rerank", choices=["bm25", "vectors", "hybrid", "hybrid+rerank"]
+    )
+    ask.add_argument("--data", type=Path, help=data_help)
+    ask.set_defaults(func=_ask)
+
+    meeting = commands.add_parser(
+        "meeting", help="summarize an ingested recording: decisions + action items (JSON)"
+    )
+    meeting.add_argument("source", help="source id (see `granit sources`) or file name")
+    meeting.add_argument("--data", type=Path, help=data_help)
+    meeting.set_defaults(func=_meeting)
 
     from granit.bench.run import SCENARIOS
 
@@ -302,6 +321,78 @@ def _sources(args: argparse.Namespace) -> int:
         )
     for job in store.jobs("failed"):
         print(f"   failed job #{job.id} ({job.task}, source #{job.source_id}): {job.error}")
+    return 0
+
+
+@contextmanager
+def _llm_server() -> Iterator[None]:
+    """Use the running Q&A server, or start one for this command (never while an ingest worker holds Phase A)."""
+    import subprocess
+
+    from granit.config import HUB_MODELS
+    from granit.models.download import local_snapshot
+    from granit.models.server import LLMServer, ServerConfig, stream_chat
+
+    server = LLMServer(ServerConfig(local_snapshot(HUB_MODELS["llm"])))
+    if server.healthy():
+        yield
+        return
+    busy = subprocess.run(
+        ["pgrep", "-f", r"granit\.ingest\.worker|granit ingest"], capture_output=True
+    )
+    if busy.returncode == 0:
+        raise SystemExit("ingest is running (Phase A); ask again when it has finished")
+    print("starting the Q&A model…", file=sys.stderr)
+    with server:
+        server.wait_ready()
+        stream_chat(
+            server.config.base_url,
+            [{"role": "user", "content": "Hi"}],
+            max_tokens=1,
+            enable_thinking=False,
+        )
+        yield
+
+
+def _ask(args: argparse.Namespace) -> int:
+    from granit.reason.llm import LLMClient
+    from granit.reason.qa import QA
+    from granit.reason.tokens import GraniteTokens
+    from granit.search.embed import Embedder
+    from granit.search.hybrid import Searcher
+    from granit.search.rerank import Reranker
+    from granit.search.vectors import VectorIndex
+
+    store = _store(args)
+    embedder = Embedder()
+    searcher = Searcher(store, embedder, VectorIndex(store, embedder.revision), Reranker())
+    with _llm_server():
+        qa = QA(store, searcher, LLMClient(thinking=args.thinking), GraniteTokens(), mode=args.mode)
+        answer = qa.ask(
+            args.question,
+            on_delta=lambda d: print(d[1], end="", flush=True) if d[0] == "content" else None,
+        )
+    print()
+    for number, hit in zip(answer.citation_numbers(), answer.cited, strict=True):
+        print(f"  [{number}] {hit.citation}")
+    print(f"  ({answer.latency['total_s']:.1f} s, turn #{answer.turn_id})", file=sys.stderr)
+    return 0
+
+
+def _meeting(args: argparse.Namespace) -> int:
+    from granit.reason.llm import LLMClient
+    from granit.reason.meetings import summarize_source
+    from granit.reason.tokens import GraniteTokens
+
+    store = _store(args)
+    matches = [s for s in store.sources() if str(s.id) == args.source or s.name == args.source]
+    if not matches:
+        print(f"no source {args.source!r} (see `granit sources`)", file=sys.stderr)
+        return 1
+    with _llm_server():
+        summary = summarize_source(store, matches[0], LLMClient(), GraniteTokens())
+    print(json.dumps(summary.data, indent=2, ensure_ascii=False))
+    print(f"({summary.sections} section(s), {summary.seconds:.1f} s)", file=sys.stderr)
     return 0
 
 

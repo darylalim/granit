@@ -15,6 +15,7 @@ import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from granit.config import INGEST_MLX_CACHE_LIMIT_GB
@@ -194,3 +195,36 @@ def _peak_footprint_gb() -> float:
         return round(footprint().peak_gb, 2)
     except OSError:
         return 0.0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m granit.ingest.worker --data DIR``: the Phase A process the phase manager starts (PLAN.md §2.1).
+
+    Progress lines go to stdout as they happen; the last line is ``RESULT <json>`` for the phase manager.
+    """
+    import argparse
+    import sys
+
+    from granit.config import DATA_DIR
+
+    parser = argparse.ArgumentParser(prog="python -m granit.ingest.worker")
+    parser.add_argument("--data", type=Path, default=DATA_DIR)
+    args = parser.parse_args(argv)
+    store = Store(args.data)
+    try:
+        report = IngestWorker(store).run(log=lambda line: print(line, flush=True))
+    finally:
+        store.close()
+    result = {
+        "done": report.done,
+        "failed": report.failed,
+        "seconds": report.seconds,
+        "peak_footprint_gb": report.peak_footprint_gb,
+    }
+    print("RESULT " + json.dumps(result), flush=True)
+    sys.stdout.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

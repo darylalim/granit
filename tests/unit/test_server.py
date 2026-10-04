@@ -67,6 +67,10 @@ def fake_server() -> Iterator[str]:
 def test_stream_chat_collects_text_usage_and_timing(fake_server: str) -> None:
     completion = stream_chat(fake_server, [{"role": "user", "content": "hi"}], max_tokens=8)
     assert completion.text == "hmmHello world"
+    assert (completion.reasoning, completion.content) == ("hmm", "Hello world")
+    assert (
+        completion.first_content_s is not None and completion.first_content_s >= completion.ttft_s
+    )
     assert (completion.prompt_tokens, completion.completion_tokens) == (100, 3)
     assert completion.cached_tokens == 40
     assert 0 < completion.ttft_s <= completion.total_s
@@ -82,13 +86,31 @@ def test_stream_chat_can_turn_thinking_off(fake_server: str) -> None:
     assert FakeOpenAI.requests[0]["chat_template_kwargs"] == {"enable_thinking": False}
 
 
+def test_stream_chat_template_kwargs_and_deltas(fake_server: str) -> None:
+    deltas: list[tuple[str, str]] = []
+    stream_chat(
+        fake_server,
+        [{"role": "user", "content": "hi"}],
+        template_kwargs={"reasoning_effort": "low"},
+        on_delta=deltas.append,
+    )
+    assert FakeOpenAI.requests[0]["chat_template_kwargs"] == {"reasoning_effort": "low"}
+    assert deltas == [("reasoning", "hmm"), ("content", "Hello"), ("content", " world")]
+
+
 def test_completion_rates() -> None:
     c = Completion(
-        "x", prompt_tokens=1100, completion_tokens=101, cached_tokens=100, ttft_s=2.0, total_s=4.0
+        "x",
+        "",
+        prompt_tokens=1100,
+        completion_tokens=101,
+        cached_tokens=100,
+        ttft_s=2.0,
+        total_s=4.0,
     )
     assert c.prefill_tps == 500.0  # only uncached tokens are prefilled
     assert c.decode_tps == 50.0  # 100 tokens after the first, over 2 s
-    instant = Completion("", 0, 1, 0, ttft_s=0.0, total_s=0.0)
+    instant = Completion("", "", 0, 1, 0, ttft_s=0.0, total_s=0.0)
     assert (instant.prefill_tps, instant.decode_tps) == (0.0, 0.0)
 
 

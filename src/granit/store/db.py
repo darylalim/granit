@@ -131,10 +131,10 @@ def now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def connect(path: Path | str) -> sqlite3.Connection:
+def connect(path: Path | str, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open the database with granit's settings and bring the schema up to date."""
     conn = sqlite3.connect(
-        path, timeout=5.0, isolation_level=None
+        path, timeout=5.0, isolation_level=None, check_same_thread=check_same_thread
     )  # autocommit; transactions are explicit
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -277,13 +277,17 @@ def sha256_of(path: Path) -> str:
 
 
 class Store:
-    """``data/`` on disk: ``granit.db``, ``files/`` and ``derived/`` (PLAN.md §2.3)."""
+    """``data/`` on disk: ``granit.db``, ``files/`` and ``derived/`` (PLAN.md §2.3).
 
-    def __init__(self, root: Path | str) -> None:
+    ``shared=True`` lets one connection be used from several threads (the UI backend: SQLite here is serialized-threadsafe);
+    the caller must still keep its write transactions from overlapping (the backend does them under one lock).
+    """
+
+    def __init__(self, root: Path | str, shared: bool = False) -> None:
         self.root = Path(root)
         (self.root / "files").mkdir(parents=True, exist_ok=True)
         (self.root / "derived").mkdir(exist_ok=True)
-        self.conn = connect(self.root / "granit.db")
+        self.conn = connect(self.root / "granit.db", check_same_thread=not shared)
 
     def close(self) -> None:
         self.conn.close()
@@ -296,8 +300,13 @@ class Store:
 
     # sources and jobs
 
-    def add_file(self, path: Path | str, name: str | None = None) -> tuple[Source, bool]:
-        """Store a file by content hash and queue an ingest job. Returns (source, created); duplicates aren't re-added."""
+    def add_file(
+        self, path: Path | str, name: str | None = None, params: dict[str, Any] | None = None
+    ) -> tuple[Source, bool]:
+        """Store a file by content hash and queue an ingest job. Returns (source, created); duplicates aren't re-added.
+
+        ``params`` go to the ingest job, e.g. ``{"vision_tables": True}`` ("Accurate tables", PLAN.md §3.6).
+        """
         path = Path(path)
         kind = kind_of(path)
         sha = sha256_of(path)
@@ -318,8 +327,19 @@ class Store:
             source_id = cursor.lastrowid
             if source_id is None:
                 raise RuntimeError("INSERT INTO sources returned no row id")
-            self._enqueue(source_id, "ingest", {})
+            self._enqueue(source_id, "ingest", params or {})
         return self.source(source_id), True
+
+    def queue_ingest(self, source: Source, params: dict[str, Any] | None = None) -> Job:
+        """Ingest a stored file again (e.g. with accurate tables). Its current chunks stay searchable until the new ones
+        replace them in one transaction. A queued or running ingest of the same source is returned instead of a second one."""
+        with transaction(self.conn):
+            row = self.conn.execute(
+                "SELECT id FROM jobs WHERE source_id = ? AND task = 'ingest' AND status IN ('queued', 'running')",
+                (source.id,),
+            ).fetchone()
+            job_id = row[0] if row else self._enqueue(source.id, "ingest", params or {})
+        return self.job(job_id)
 
     def enqueue_extract(self, source: Source, schema: dict[str, Any]) -> Job:
         with transaction(self.conn):
@@ -354,6 +374,16 @@ class Store:
         else:
             rows = self.conn.execute("SELECT * FROM jobs ORDER BY id")
         return [Job.from_row(r) for r in rows]
+
+    def job_rows(self, limit: int = 50) -> list[sqlite3.Row]:
+        """Jobs for the UI, newest first: queued and running ones always, then the most recent finished ones."""
+        return list(
+            self.conn.execute(
+                "SELECT j.*, s.name AS source_name, s.kind AS source_kind FROM jobs j JOIN sources s ON s.id = j.source_id"
+                " ORDER BY j.status IN ('queued', 'running') DESC, j.id DESC LIMIT ?",
+                (limit,),
+            )
+        )
 
     def queued_count(self) -> int:
         return self.conn.execute("SELECT count(*) FROM jobs WHERE status = 'queued'").fetchone()[0]

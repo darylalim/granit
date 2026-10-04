@@ -173,6 +173,13 @@ def build_parser() -> argparse.ArgumentParser:
     meeting.add_argument("--data", type=Path, help=data_help)
     meeting.set_defaults(func=_meeting)
 
+    ui = commands.add_parser(
+        "ui", help="open the app in your browser (Ingest, Library, Ask, Extract)"
+    )
+    ui.add_argument("--data", type=Path, help=data_help)
+    ui.add_argument("--port", type=int, default=8501, help="local port for the app (default: 8501)")
+    ui.set_defaults(func=_ui)
+
     from granit.bench.run import SCENARIOS
 
     bench = commands.add_parser(
@@ -257,6 +264,31 @@ def _extract(args: argparse.Namespace) -> int:
     if not extraction.valid:
         print("invalid: " + "; ".join(extraction.errors), file=sys.stderr)
     return 0 if extraction.valid else 1
+
+
+def _ui(args: argparse.Namespace) -> int:
+    """``streamlit run app/Home.py`` from the project root, so ``.streamlit/config.toml`` (theme, privacy) applies."""
+    import os
+    import subprocess
+
+    from granit.config import PROJECT_ROOT
+
+    env = dict(os.environ)
+    if args.data:
+        env["GRANIT_DATA_DIR"] = str(args.data.resolve())
+    command = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        "app/Home.py",
+        "--server.port",
+        str(args.port),
+    ]
+    try:
+        return subprocess.run(command, cwd=PROJECT_ROOT, env=env).returncode
+    except KeyboardInterrupt:
+        return 0
 
 
 def _store(args: argparse.Namespace) -> Any:

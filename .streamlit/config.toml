@@ -1,0 +1,112 @@
+# granit theme: "granite" stone neutrals + one indigo accent; status colors are reserved for status.
+# Light and dark share every hue; only lightness changes. Contrast checked to WCAG AA (PLAN.md §4.7).
+
+[browser]
+gatherUsageStats = false          # fully local app: no Streamlit telemetry
+
+[server]
+address = "localhost"             # never listen on the network
+showEmailPrompt = false           # no first-run prompt (it would block `granit ui` without a terminal)
+maxUploadSize = 2048              # MB: an hour of 44.1 kHz stereo WAV is ~600 MB (Streamlit's default is 200)
+
+[client]
+toolbarMode = "viewer"            # hide developer options (Deploy, rerun); keep Settings (light/dark switch)
+
+[theme]
+# Shared by both modes
+font = "sans-serif"               # Source Sans, bundled with Streamlit (works offline; no Google Fonts)
+codeFont = "monospace"            # Source Code Pro, bundled
+baseFontSize = 15
+headingFontWeights = [700, 600, 600, 600, 600, 600]
+baseRadius = "medium"
+buttonRadius = "medium"
+showWidgetBorder = true
+showSidebarBorder = true
+linkUnderline = false
+
+[theme.light]
+primaryColor = "#4F46E5"                  # indigo: actions only (buttons, links, focus, selected nav)
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F5F4"      # stone-100
+textColor = "#1C1917"                     # stone-900
+linkColor = "#4338CA"
+borderColor = "#D6D3D1"                   # stone-300
+codeBackgroundColor = "#F5F5F4"
+codeTextColor = "#1C1917"
+dataframeBorderColor = "#E7E5E4"
+dataframeHeaderBackgroundColor = "#F5F5F4"
+dataframeHeaderTextColor = "#1C1917"
+greenColor = "#15803D"
+greenBackgroundColor = "#DCFCE7"
+greenTextColor = "#166534"
+yellowColor = "#A16207"
+yellowBackgroundColor = "#FEF9C3"
+yellowTextColor = "#854D0E"
+orangeColor = "#C2410C"
+orangeBackgroundColor = "#FFEDD5"
+orangeTextColor = "#9A3412"
+redColor = "#B91C1C"
+redBackgroundColor = "#FEE2E2"
+redTextColor = "#991B1B"
+blueColor = "#1D4ED8"
+blueBackgroundColor = "#DBEAFE"
+blueTextColor = "#1E40AF"
+violetColor = "#7E22CE"
+violetBackgroundColor = "#F3E8FF"
+violetTextColor = "#6B21A8"
+grayColor = "#57534E"
+grayBackgroundColor = "#E7E5E4"
+grayTextColor = "#44403C"
+chartCategoricalColors = ["#4F46E5", "#0D9488", "#B45309", "#BE185D", "#0369A1", "#7C3AED", "#4D7C0F", "#57534E"]
+chartSequentialColors = ["#EEF2FF", "#E0E7FF", "#C7D2FE", "#A5B4FC", "#818CF8", "#6366F1", "#4F46E5", "#4338CA", "#3730A3", "#312E81"]
+chartDivergingColors = ["#991B1B", "#DC2626", "#F87171", "#FCA5A5", "#FEE2E2", "#E0E7FF", "#A5B4FC", "#818CF8", "#4F46E5", "#3730A3"]
+
+[theme.light.sidebar]
+backgroundColor = "#F5F5F4"
+secondaryBackgroundColor = "#E7E5E4"
+codeBackgroundColor = "#E7E5E4"
+borderColor = "#D6D3D1"
+
+[theme.dark]
+primaryColor = "#6059F1"                  # same indigo hue, lighter: white button text 5.0:1, vs background 3.5:1
+backgroundColor = "#1C1917"               # stone-900
+secondaryBackgroundColor = "#292524"      # stone-800
+textColor = "#F5F5F4"                     # stone-100
+linkColor = "#A5B4FC"
+borderColor = "#44403C"                   # stone-700
+codeBackgroundColor = "#292524"
+codeTextColor = "#F5F5F4"
+dataframeBorderColor = "#44403C"
+dataframeHeaderBackgroundColor = "#292524"
+dataframeHeaderTextColor = "#F5F5F4"
+# Status tints = 18% of the status color over the page, the same visual weight as light mode's pale tints
+greenColor = "#4ADE80"
+greenBackgroundColor = "#243C2A"
+greenTextColor = "#86EFAC"
+yellowColor = "#FACC15"
+yellowBackgroundColor = "#443917"
+yellowTextColor = "#FDE68A"
+orangeColor = "#FB923C"
+orangeBackgroundColor = "#442F1E"
+orangeTextColor = "#FDBA74"
+redColor = "#F87171"
+redBackgroundColor = "#442927"
+redTextColor = "#FCA5A5"
+blueColor = "#60A5FA"
+blueBackgroundColor = "#283240"
+blueTextColor = "#93C5FD"
+violetColor = "#C084FC"
+violetBackgroundColor = "#3A2C40"
+violetTextColor = "#D8B4FE"
+grayColor = "#A8A29E"
+grayBackgroundColor = "#35322F"
+grayTextColor = "#D6D3D1"
+chartCategoricalColors = ["#818CF8", "#2DD4BF", "#FBBF24", "#F472B6", "#38BDF8", "#A78BFA", "#A3E635", "#A8A29E"]
+chartSequentialColors = ["#312E81", "#3730A3", "#4338CA", "#4F46E5", "#6366F1", "#818CF8", "#A5B4FC", "#C7D2FE", "#E0E7FF", "#EEF2FF"]
+chartDivergingColors = ["#FCA5A5", "#F87171", "#DC2626", "#991B1B", "#450A0A", "#1E1B4B", "#3730A3", "#4F46E5", "#818CF8", "#A5B4FC"]
+
+[theme.dark.sidebar]
+backgroundColor = "#0C0A09"               # stone-950: one step darker than the page, mirroring light mode
+secondaryBackgroundColor = "#1C1917"
+codeBackgroundColor = "#1C1917"
+borderColor = "#292524"

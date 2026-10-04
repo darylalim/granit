@@ -135,6 +135,7 @@ class Searcher:
     def vectors(self, query: str, k: int = SEARCH_CANDIDATES) -> Ranked:
         if self.embedder is None or self.index is None:
             return []
+        self.index.refresh()  # one SELECT; reloads only after an ingest or deletion (long-lived UI backend)
         return self.index.search(self.embedder.encode_query(query), k)
 
     # the pipeline
@@ -176,18 +177,18 @@ class Searcher:
 
         top = ranked[:k]
         rows = self.store.chunks_by_id([c for c, _ in top])
-        hits = [_hit(rows[c], score) for c, score in top if c in rows]
+        hits = [hit_from_row(rows[c], score) for c, score in top if c in rows]
         return SearchResult(query, mode, hits, trace, seconds)
 
     def _rerank(self, query: str, candidates: Ranked) -> Ranked:
         rows = self.store.chunks_by_id([c for c, _ in candidates])
         ids = [c for c, _ in candidates if c in rows]
-        passages = [_hit(rows[c], 0.0).passage for c in ids]
+        passages = [hit_from_row(rows[c], 0.0).passage for c in ids]
         scores = self.reranker.scores(query, passages)
         return sorted(zip(ids, scores, strict=True), key=lambda item: -item[1])
 
 
-def _hit(row: Any, score: float) -> Hit:
+def hit_from_row(row: Any, score: float) -> Hit:
     return Hit(
         chunk_id=row["id"],
         score=score,

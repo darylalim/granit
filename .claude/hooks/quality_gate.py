@@ -1,6 +1,6 @@
 """H5 · Stop: if Python changed, run the same checks as CI before Claude finishes (PLAN.md §4.1, §4.2).
 
-ruff format --check · ruff check · ty check src tests · pytest -q -m "not model". Failures → exit 2 with a
+ruff format --check · ruff check · ty check src tests app · pytest -q -m "not model". Failures → exit 2 with a
 short summary so Claude keeps working. ``stop_hook_active`` → exit 0, so it can never loop.
 """
 
@@ -14,7 +14,7 @@ from _hooklib import block, log, project_dir, read_input, run
 CHECKS: tuple[tuple[str, list[str]], ...] = (
     ("ruff format --check", ["uv", "run", "--quiet", "ruff", "format", "--check"]),
     ("ruff check", ["uv", "run", "--quiet", "ruff", "check", "--output-format", "concise"]),
-    ("ty check", ["uv", "run", "--quiet", "ty", "check", "src", "tests"]),
+    ("ty check", ["uv", "run", "--quiet", "ty", "check", "src", "tests", "app"]),
     ("pytest", ["uv", "run", "--quiet", "pytest", "-q", "-m", "not model", "-x", "--no-header"]),
 )
 TAIL_LINES = 12

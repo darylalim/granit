@@ -248,8 +248,12 @@ class DocumentIngestor:
         self.vision.load()
         return self
 
-    def ingest(self, path: str | Path, out_dir: str | Path) -> DocumentResult:
+    def ingest(
+        self, path: str | Path, out_dir: str | Path, vision_tables: bool | None = None
+    ) -> DocumentResult:
+        """``vision_tables`` overrides the ingestor's default for this document ("Accurate tables" per upload)."""
         path, out_dir = Path(path), Path(out_dir)
+        tables_by_vision = self.vision_tables if vision_tables is None else vision_tables
         if not path.is_file():
             raise FileNotFoundError(f"no such file: {path}")
         check_format(path)
@@ -266,7 +270,7 @@ class DocumentIngestor:
             start = time.perf_counter()
             extractions, charts = self._charts(doc, pages, crops, out_dir)
             seconds["charts"] = round(time.perf_counter() - start, 2)
-            if self.vision_tables:
+            if tables_by_vision:
                 start = time.perf_counter()
                 extractions += self._tables(doc, pages, crops, out_dir)
                 seconds["tables"] = round(time.perf_counter() - start, 2)

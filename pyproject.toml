@@ -43,6 +43,9 @@ dev = [
     "pytest==9.1.1",
     "jiwer>=4",
 ]
+screenshots = [
+    "playwright>=1.55",
+]
 
 [tool.uv]
 # uv-managed CPython: its SQLite has FTS5 + enable_load_extension, verified in PLAN.md §2.3 (sqlite-vec later).

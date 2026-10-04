@@ -30,6 +30,8 @@ models at a time.
 
 Audio fixtures in `tests/fixtures/audio/` are generated, not recorded: `uv run python scripts/make_audio_fixtures.py`
 (macOS `say` + `afconvert`; MP3 / Ogg need ffmpeg). Regenerate after changing the script and commit the output.
+Document fixtures in `tests/fixtures/documents/` come from `uv run python scripts/make_document_fixtures.py`
+(Pillow + macOS Helvetica; the digital memo PDF needs Google Chrome).
 See `tests/README.md` for third-party test data credits.
 
 ## Licensing

@@ -202,6 +202,8 @@ def test_protect_paths_end_to_end(project: Path) -> None:
         "python -m granit.models.smoke llm",
         "uv run granit bench",
         "uv run granit transcribe meeting.m4a",
+        "uv run granit convert report.pdf",
+        "uv run granit extract invoice.png --schema s.json",
         "uv run granit bench phase-b --quick",
         "python -m granit.bench.workers phase-a --hold",
         "python -m mlx_lm server --model x",

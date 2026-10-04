@@ -1,0 +1,99 @@
+{
+  "report.pdf": {
+    "pages": 2,
+    "texts": [
+      "Quarterly Operations Report",
+      "INV-2026-0042",
+      "Revenue peaked in Q4",
+      "Next review: Tuesday"
+    ],
+    "table": {
+      "header": [
+        "Region",
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "rows": [
+        [
+          "North",
+          "1,240",
+          "1,310",
+          "1,425"
+        ],
+        [
+          "South",
+          "980",
+          "1,045",
+          "1,102"
+        ],
+        [
+          "East",
+          "1,515",
+          "1,488",
+          "1,560"
+        ],
+        [
+          "West",
+          "760",
+          "842",
+          "905"
+        ]
+      ]
+    },
+    "chart": {
+      "categories": [
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4"
+      ],
+      "values": [
+        120,
+        145,
+        98,
+        160
+      ]
+    },
+    "charts": 1
+  },
+  "invoice.png": {
+    "expected": {
+      "invoice_number": "INV-2026-0042",
+      "invoice_date": "2026-09-14",
+      "due_date": "2026-10-14",
+      "vendor_name": "Granite Supply Co.",
+      "customer_name": "Northwind Logistics Ltd.",
+      "total_amount": "$4,980.00"
+    },
+    "absent": [
+      "purchase_order"
+    ]
+  },
+  "memo.pdf": {
+    "texts": [
+      "Procurement Memo",
+      "INV-2026-0042",
+      "$4,980.00"
+    ],
+    "table": {
+      "header": [
+        "Owner",
+        "Task",
+        "Due"
+      ],
+      "rows": [
+        [
+          "Priya",
+          "Approve the revised invoice",
+          "Friday"
+        ],
+        [
+          "Marcus",
+          "Send the contract to Legal",
+          "Wednesday"
+        ]
+      ]
+    }
+  }
+}

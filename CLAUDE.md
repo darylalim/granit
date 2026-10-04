@@ -13,6 +13,8 @@ uv run ruff format && uv run ruff check   # format + lint
 uv run ty check src tests                 # types
 uv run granit models list|download|convert|smoke
 uv run granit transcribe FILE… [--json DIR]  # audio → timestamped segments (M2)
+uv run granit convert FILE… [--out DIR] [--vision-tables]  # PDF/image → Markdown + chart data (M3)
+uv run granit extract FILE --schema S.json  # form fields via Granite Vision, validated (M3)
 uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
 

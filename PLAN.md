@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v22 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v23 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v22: M0, M1, M2 (audio) and M3 (documents) done; 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v23: M0–M4 done (store + search); 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -73,6 +73,11 @@ Vision yes/no and their CSV is attached as `meta.tabular_chart`, so chart data a
 Docling's by default** (equal accuracy on the card's table, 8× faster); M7 decides with hard tables and a pre-agreed rule (switch
 only if Vision wins by ≥ 3 points of cell F1, §4.9), and M6 adds a per-upload "Accurate tables (slower)" option; form extraction
 normalizes dates to ISO 8601 and treats nulls as missing.
+**Changes in v23 (M4):** store, chunking, hybrid search and the ingest worker built (§2.3 *As built in M4*). **The FTS tokenizer
+choice was corrected:** `tokenchars '-_./'` glued punctuation to ordinary words ("finance." ≠ "finance"), so the index and queries now
+share a normalization that keeps IDs whole and splits everything else. Tables are chunked as Markdown; failed jobs wait for the next
+run instead of being replayed; Phase A peaked at 12.8 GB with the MLX cache cap; hybrid + rerank ≈ 90 ms per question. M3's
+`document.json` no longer embeds base64 page images (175 → 19 KB for a 2-page scan).
 ---
 
 ## 1. Scope (v1)
@@ -178,14 +183,19 @@ data/                              # gitignored; path set in config.py
   A worker crash leaves no half-ingested source, and the job is simply retried.
 - Only the ingest worker writes heavily (Phase A). The UI writes small rows only (new jobs, `qa_turns`).
 
-#### Tokenizer choice for codes and IDs
+#### Tokenizer choice for codes and IDs (corrected in M4)
 
 - The default FTS5 tokenizer splits on punctuation: in testing, the query `INV` matched `INV-2026-0042`, and a
   search for the full ID only matches it as a sequence of separate pieces.
 - `chunks_fts` uses `tokenize="unicode61 tokenchars '-_./'"`, which keeps `INV-2026-0042`, `v1.2.3` and `ab_12` as single tokens.
-- `chunks_trigram` (`tokenize="trigram"`) handles partial-ID lookups (`2026-004`). The search layer sends ID-like queries
-  (regex: letters/digits with `-_./`) there and merges the results into hybrid search.
-- Unit tests cover exact-ID, partial-ID and plain-word queries.
+- **M4 finding:** on its own, that also glues punctuation to ordinary words. "approved by Finance." was indexed as `finance.` and
+  "Legal/Procurement" as one token, so a search for "finance" or "legal" found nothing, which would affect most sentence-final words.
+  **Fix (`store/text.py`):** the index sees a normalized `chunks.search_text` and queries go through the same function: a token
+  **with a digit** keeps its `-_./` (an ID, version, date or amount), any other token is split at them (`finance.` → `finance`,
+  `Legal/Procurement` → `legal procurement`).
+- `chunks_trigram` (`tokenize="trigram"`) handles partial-ID lookups (`2026-004`). The search layer sends ID-like query tokens
+  (letters/digits with `-_./`, at least 3 characters, not a bare number) there and merges the results into hybrid search with RRF.
+- Unit tests cover exact-ID, partial-ID, plain-word and sentence-final-word queries.
 
 #### Vector search
 
@@ -205,6 +215,31 @@ data/                              # gitignored; path set in config.py
 #### Operations
 
 - Backup = copy `data/` (or `sqlite3 granit.db ".backup ..."` while running). Encryption at rest = macOS FileVault.
+
+#### As built in M4 (`store/`, `search/`, `ingest/worker.py`)
+
+- **Schema** is versioned (`PRAGMA user_version`, migrations in `store/db.py`): `sources`, `jobs`, `chunks` (+ `search_text`),
+  `chunks_fts` and `chunks_trigram` (external-content FTS5, kept in sync by triggers), `chunk_vectors`, `extractions` and `meta`
+  (`corpus_version`, bumped by every completed job or deletion so Phase B reloads its vector matrix). `qa_turns` and `verdicts` come
+  with M5 / M8 as later migrations.
+- **Files** are stored once by sha256 (`files/<sha256><ext>`, written atomically); adding the same file again is a no-op.
+- **Jobs:** claimed atomically (`UPDATE … RETURNING`); a failure is recorded and **re-queued for the next worker run** (not replayed
+  in the same run, which could cost minutes of Vision time while Q&A is paused) up to 3 attempts; jobs left `running` by a crashed
+  worker are re-queued when the next worker starts. Re-ingesting a source replaces its chunks.
+- **Chunking (`store/chunking.py`):** Docling's `HierarchicalChunker` with **Markdown tables** (its default "North, 1 = 1,240"
+  triplets drop the column names questions use); consecutive text under one heading merged to ~300 tokens (1,100 characters at
+  3.75 characters per token); tables and charts kept as their own chunks; oversized text split at sentences and tables by rows with
+  the header repeated. Transcripts: consecutive segments up to the same size, with start / end seconds. The heading path is stored as
+  `context` and prepended for BM25, embeddings and the reranker. Citations: `report.pdf · p. 2`, `pp. 3–4`, `call.m4a · 12:40`.
+- **Worker:** loads models lazily by kind (an audio-only batch never loads Vision) and caps MLX's buffer cache at 1 GB.
+  **Phase A peaked at 12.8 GB** ingesting all M2 / M3 fixtures (M1: 15.6 GB without the cap).
+- **Measured on the fixtures (5 files, 12 chunks):** query embedding ~12 ms, vector top-50 0.7 ms, reranking ~75 ms; **hybrid + rerank
+  ≈ 90 ms per question** after a one-time warm-up (`Searcher.warm_up()`, ~100 ms, for the UI to call at start). Every expected answer
+  was in the top 3: the chart for "Q2 revenue", the table for "North Q1 units", the meeting for "who sends the draft to Legal", the memo
+  table for "who approves the invoice", the invoice for its own ID; the partial ID `2026-004` reaches results only through trigrams.
+- **Known, for M7:** the reranker scored the Markdown chart table just below the report's intro paragraph (0.881 vs 0.893) although
+  RRF ranked it first. M7's retrieval comparison should test **linearizing tables / charts for the reranker** (e.g. "Q2: Revenue
+  145 thousand USD") before changing anything.
 
 #### Alternatives considered
 
@@ -1432,8 +1467,8 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | LLM context | **16K tokens per request** (prompt ≤ 14,336 + output ≤ 2,048), enforced by the M5 prompt builder; meetings over ~1 hour summarized in sections; fallback `--kv-bits 8` at 32K if M7 shows sectioned summaries miss things |
 | Audio | Decode: miniaudio (WAV/FLAC/MP3/Ogg) + macOS `afconvert` (M4A/AAC/AIFF/CAF), no ffmpeg; **Silero VAD v6 (MIT, via mlx-audio)** splits at pauses into ≤ 30 s chunks; TurboCTC per chunk; timestamped segments |
 | Documents | Granite-Docling via Docling (pypdfium2 page rendering) → Markdown + `document.json`; pictures ≥ 72 pt → Vision yes/no chart check → `<chart2csv>` into `meta.tabular_chart`; tables from Docling unless `DOCUMENT_VISION_TABLES` (per-upload "Accurate tables" in M6; default decided in M7 by the §4.9 rule); forms: VAREX prompt + JSON Schema, dates → ISO 8601 (§3.6) |
-| Search | **Hybrid + rerank**: SQLite FTS5 BM25 + Granite Embedding English R2 vectors (fp16 matrix on MPS, 1 ms at 150K) → RRF → Granite Reranker English R2 (555 ms for 30 pairs) → top-8 |
-| Storage | **SQLite** (WAL, one transaction per job) + FTS5 (code tokenizer) + trigram ID index + float16 vectors in NumPy (sqlite-vec later); files on disk by sha256. Postgres + pgvector only if multi-user |
+| Search | **Hybrid + rerank**: SQLite FTS5 BM25 + Granite Embedding English R2 vectors (fp16 matrix on MPS, 1 ms at 150K) → RRF → Granite Reranker English R2 (555 ms for 30 pairs) → top-8; ≈ 90 ms per question on the fixture library (M4) |
+| Storage | **SQLite** (WAL, one transaction per job, versioned schema) + FTS5 over normalized `search_text` (IDs kept whole, words split from punctuation) + trigram ID index + float16 vectors on MPS (sqlite-vec later); files on disk by sha256. Postgres + pgvector only if multi-user |
 | Verification | **Granite Guardian 4.1 8B (local MLX q8)**: M7 evaluation in v1; batch verify job (Phase C) in v1.1; never loaded with the Q&A LLM; no-think; `yes_means` per criterion |
 | UI | Streamlit, 4 pages: Ingest, Library, Ask, Extract, plus a phase status banner (verdict badges in v1.1) |
 | Layout | **Wide pages, width-capped content (§4.8):** Ask 720 px column + 380 px sources panel that wraps beside it from ~1470 px; Extract 2 × 520 px panels side by side from ~1512 px; Library tables stretch; sidebar collapses automatically; `safe_md()` for all model output |

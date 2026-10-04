@@ -7,6 +7,7 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from granit.config import HUB_MODELS, LOCAL_MODELS, RUNTIME_HUB_MODELS
 
@@ -129,6 +130,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     extract.set_defaults(func=_extract)
 
+    data_help = "data directory (default: GRANIT_DATA_DIR or ./data)"
+    ingest = commands.add_parser(
+        "ingest", help="add files to the library and process the queue (Phase A)"
+    )
+    ingest.add_argument("files", nargs="*", type=Path, metavar="FILE")
+    ingest.add_argument("--data", type=Path, help=data_help)
+    ingest.set_defaults(func=_ingest)
+
+    search = commands.add_parser("search", help="hybrid search over the library, with citations")
+    search.add_argument("query")
+    search.add_argument(
+        "--mode", default="hybrid+rerank", choices=["bm25", "vectors", "hybrid", "hybrid+rerank"]
+    )
+    search.add_argument("-k", type=int, default=8)
+    search.add_argument(
+        "--json", action="store_true", help="print the hits and per-stage trace as JSON"
+    )
+    search.add_argument("--data", type=Path, help=data_help)
+    search.set_defaults(func=_search)
+
+    sources = commands.add_parser("sources", help="list the library: files, status, chunks")
+    sources.add_argument("--data", type=Path, help=data_help)
+    sources.set_defaults(func=_sources)
+
     from granit.bench.run import SCENARIOS
 
     bench = commands.add_parser(
@@ -213,6 +238,71 @@ def _extract(args: argparse.Namespace) -> int:
     if not extraction.valid:
         print("invalid: " + "; ".join(extraction.errors), file=sys.stderr)
     return 0 if extraction.valid else 1
+
+
+def _store(args: argparse.Namespace) -> Any:
+    from granit.config import DATA_DIR
+    from granit.store.db import Store
+
+    return Store(args.data or DATA_DIR)
+
+
+def _ingest(args: argparse.Namespace) -> int:
+    from granit.ingest.worker import IngestWorker
+
+    store = _store(args)
+    for path in args.files:
+        try:
+            source, created = store.add_file(path)
+        except (ValueError, FileNotFoundError) as exc:
+            print(f"✗ {path}: {exc}", file=sys.stderr)
+            continue
+        print(
+            f"{'+ queued' if created else '= already in the library'}: {source.name} (#{source.id})"
+        )
+    if not store.queued_count():
+        print("nothing to process")
+        return 0
+    report = IngestWorker(store).run()
+    print(
+        f"── {len(report.done)} done, {len(report.failed)} failed in {report.seconds:.1f} s "
+        f"(peak memory {report.peak_footprint_gb:.1f} GB)"
+    )
+    return 1 if report.failed else 0
+
+
+def _search(args: argparse.Namespace) -> int:
+    from granit.search.embed import Embedder
+    from granit.search.hybrid import Searcher
+    from granit.search.rerank import Reranker
+    from granit.search.vectors import VectorIndex
+
+    store = _store(args)
+    embedder = Embedder() if args.mode != "bm25" else None
+    index = VectorIndex(store, embedder.revision) if embedder else None
+    reranker = Reranker() if args.mode == "hybrid+rerank" else None
+    result = Searcher(store, embedder, index, reranker).search(args.query, args.mode, args.k)
+    if args.json:
+        print(json.dumps(result.to_json(), indent=2, ensure_ascii=False))
+        return 0
+    for rank, hit in enumerate(result.hits, start=1):
+        preview = " ".join(hit.text.split())[:160]
+        print(f"{rank}. [{hit.score:.3f}] {hit.citation} · {hit.element}\n   {preview}")
+    if not result.hits:
+        print("no results")
+    return 0
+
+
+def _sources(args: argparse.Namespace) -> int:
+    store = _store(args)
+    for source in store.sources():
+        chunks = source.info.get("chunks", "-")
+        print(
+            f"#{source.id:<4} {source.status:<10} {source.kind:<8} {chunks!s:>5} chunks  {source.name}"
+        )
+    for job in store.jobs("failed"):
+        print(f"   failed job #{job.id} ({job.task}, source #{job.source_id}): {job.error}")
+    return 0
 
 
 def _bench(args: argparse.Namespace) -> int:

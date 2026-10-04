@@ -29,9 +29,9 @@ LLM_PROMPT_CACHE_BYTES = "2GB"
 LLM_MLX_CACHE_LIMIT_GB = 1.0
 # Phase A worker: the same limit (M1 measured Phase A peaking at 15.6 GB, mostly freed buffers MLX kept cached).
 INGEST_MLX_CACHE_LIMIT_GB = 1.0
-# Documents (M3): Granite-Docling's own tables matched Vision's exactly on the card's table (96/96 values) in 3.4 s for
-# the page vs 29 s for Vision on one table, so Vision re-extracts tables only when this is on. M7 decides by the rule in
-# PLAN.md §4.9 ("Tables: Docling vs Vision"): switch only if Vision wins by >= 3 points of table cell F1.
+# Documents: tables come from Granite-Docling, and Vision reads only the tables Docling leaves empty (it finds some tables
+# but emits no cells). Decided in M7 (PLAN.md §4.9 "Tables: Docling vs Vision"): this scored 0.997 cell F1 vs 0.925 for
+# Vision on every table, at ~1/8 of the time. True = Vision reads every table (the per-upload "Accurate tables").
 DOCUMENT_VISION_TABLES = False
 # Retrieval (PLAN.md §3.2): BM25 top-50 + trigram ID hits + vector top-50 → RRF (k = 60) → rerank top 30 → top 8 to the LLM.
 SEARCH_CANDIDATES = 50

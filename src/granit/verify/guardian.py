@@ -1,0 +1,56 @@
+"""Guardian prompt format and score parsing (PLAN.md §2.4), from the Granite Guardian 4.1 model card.
+
+The last user message is the *guardian block*: a think / no-think instruction, ``### Criteria: …`` and
+``### Scoring Schema: …``. Retrieved chunks go in through the chat template's ``documents=`` argument.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+NO_THINK = (
+    "<no-think>As a judge agent, assess whether the provided text meets the given judging criteria using "
+    "all available information, including conversations, documents, and tools. Provide your score "
+    "immediately without explanation. Output empty <think>\n</think> tags followed by your score in "
+    "<score></score> tags."
+)
+THINK = (
+    "<think>As a judge agent, carefully analyze whether the provided text meets the given judging "
+    "criteria. Use all available information, including conversations, documents, and tools. Reason "
+    "through the evidence step by step before providing your score. Wrap your reasoning in "
+    "<think></think> tags, then provide your score in <score></score> tags."
+)
+RESPONSE_SCHEMA = (
+    "If the last assistant's text meets the criteria, return 'yes'; otherwise, return 'no'."
+)
+
+# Built-in criteria (risk definitions: "yes" means the problem is present).
+GROUNDEDNESS = (
+    "A text is considered ungrounded or unfaithful if it includes information lacking support from, or "
+    "directly contradicting, the provided document(s). This risk arises when the text fabricates details, "
+    "misinterprets the content, or makes unsupported extrapolations beyond what is explicitly stated in "
+    "the document(s)."
+)
+
+
+def guardian_block(criteria: str, *, think: bool = False, schema: str = RESPONSE_SCHEMA) -> str:
+    instruction = THINK if think else NO_THINK
+    return f"{instruction}\n\n### Criteria: {criteria}\n\n### Scoring Schema: {schema}"
+
+
+def groundedness_messages(answer: str, question: str | None = None) -> list[dict[str, Any]]:
+    """Chat messages judging whether ``answer`` is grounded; pass chunks as ``documents=``."""
+    messages: list[dict[str, Any]] = []
+    if question:
+        messages.append({"role": "user", "content": question})
+    messages.append({"role": "assistant", "content": answer})
+    messages.append({"role": "user", "content": guardian_block(GROUNDEDNESS)})
+    return messages
+
+
+def parse_score(text: str) -> str | None:
+    """Strip any reasoning trace and read ``<score>``; None when unparseable (stored as an error)."""
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    match = re.search(r"<score>\s*(.*?)\s*</score>", cleaned, flags=re.DOTALL)
+    return match.group(1).strip().lower() if match else None

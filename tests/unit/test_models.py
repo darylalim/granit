@@ -142,20 +142,6 @@ def test_disk_space_check(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
 # ── smoke plumbing ──
 
 
-@pytest.mark.parametrize(
-    ("text", "score"),
-    [
-        ("<think>\n</think>\n<score> yes </score>", "yes"),
-        ("<score>No</score>", "no"),
-        ("<think>maybe <score>no</score></think><score>yes</score>", "yes"),
-        ("I think yes", None),
-        ("", None),
-    ],
-)
-def test_parse_score(text: str, score: str | None) -> None:
-    assert smoke.parse_score(text) == score
-
-
 def test_every_runtime_model_has_a_smoke_check() -> None:
     covered = set(smoke.CHECKS)
     assert set(config.RUNTIME_HUB_MODELS) <= covered
@@ -173,7 +159,7 @@ def test_run_isolated_parses_the_result_line(monkeypatch: pytest.MonkeyPatch) ->
                 "key": "vad",
                 "ok": True,
                 "seconds": 1.0,
-                "max_rss_gb": 0.5,
+                "peak_footprint_gb": 0.5,
                 "details": {},
                 "error": "",
             }

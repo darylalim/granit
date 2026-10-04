@@ -60,8 +60,8 @@ extend-exclude = ["*.md"]
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PTH"]
 # E501: `ruff format` owns line length; it leaves long strings and comments alone, which is fine.
-# RUF001/RUF002: typographic text (§, –, →) is intentional, and model-card prompts are copied verbatim.
-ignore = ["E501", "RUF001", "RUF002"]
+# RUF001-003: typographic text (§, –, →, ×) is intentional, and model-card prompts are copied verbatim.
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.ty.environment]
 python-version = "3.12"

@@ -104,8 +104,11 @@ live (immediate) answer verification. **v1.1:** batch verification of answers an
   3. runs **every** queued job in one batch;
   4. exits the worker;
   5. restarts `mlx_lm.server` and health-checks it.
-- **Cost:** each switch takes about 5–15 s (loading ~9–10 GB of weights from SSD), measured in M1. Batching jobs
-  means you pay it once per batch, not once per file.
+- **Cost (measured in M1, weights in the OS file cache):** **B→A 7.6–8.9 s** (server stop 0.1 s + worker start and
+  Phase A load ~7.5–8.9 s, of which ~3 s is Python imports: torch, Docling) and **A→B 6.5–6.7 s** (worker exit 0.7 s + server
+  `/health` 3.3 s + first request 2.5 s). Batching jobs means you pay it once per batch, not once per file.
+- **"Healthy" isn't "loaded":** `mlx_lm.server` answers `/health` before its weights are in memory (1.4 GB footprint), and loads
+  them on the first request. The phase manager sends a 1-token **warm-up request** before reporting Q&A as ready.
 - **In the UI:** a status banner shows the current phase. During ingest the Ask page shows "Q&A paused" and
   keeps your typed question until Q&A is back. Extract results appear in the Library when their job finishes.
 - **Memory is freed by ending processes.** Stopping a process reliably returns all of its memory, which makes
@@ -167,11 +170,17 @@ data/                              # gitignored; path set in config.py
 
 #### Vector search
 
-- **Now:** load `chunk_vectors` into a float16 NumPy matrix **once when Phase B starts**, and reload it when the jobs
-  table changes. Rank with one matrix product. Measured: **150K chunks × 768 → top-50 in 11.6 ms, 230 MB of memory**
-  (fp16), which fits the Phase B budget (§3.3). M1 measures the real amount.
+- **Now:** load `chunk_vectors` into a **float16 PyTorch tensor on MPS** (in the same process as the query embedder) **once when
+  Phase B starts**, and reload it when the jobs table changes. Rank with one matrix product + `torch.topk`.
+- **Measured in M1** (top-50, p50): NumPy has no BLAS path for float16, so `fp16 @ fp16` is slow; the earlier "11.6 ms" was fp32 math.
+
+  | Vectors | Matrix (fp16) | NumPy fp16 | NumPy fp32 (2× memory) | **MPS fp16** |
+  |---|---|---|---|---|
+  | 150K | 230 MB | 182 ms | 9.5 ms | **1.0 ms** |
+  | 1M | 1.5 GB | 1,269 ms | 61 ms | **5.2 ms** |
+
 - **Upgrade trigger:** move to **sqlite-vec** (vectors searched on disk, not in memory) when the matrix gets big enough to matter
-  in the Phase B memory budget (about 1M chunks ≈ 1.5 GB), not when search gets slow (≈ 80 ms at 1M).
+  in the Phase B memory budget (about 1M chunks ≈ 1.5 GB), not when search gets slow (5 ms at 1M on MPS).
 - **Re-embedding:** `model_revision` is stored per vector, so after a model upgrade we re-embed only the outdated rows.
 
 #### Operations
@@ -193,7 +202,7 @@ data/                              # gitignored; path set in config.py
 Guardian 4.1 8B is a **judge**: given a conversation plus one criterion, it answers `<score>yes|no</score>`. IBM positions the 8B
 for "model assessment, observability and monitoring, and spot-checking", which matches how we use it.
 
-**Never loaded alongside the Q&A LLM.** Guardian q8 (~8.9 GB) next to the 8B q8 would put Phase B at about 25 GB, over the ~21 GB GPU limit.
+**Never loaded alongside the Q&A LLM.** Guardian q8 (12.4 GB peak, M1) next to Phase B (~16 GB) would exceed the 26.8 GB GPU limit (§3.3).
 It runs only in M7 evaluation (v1) and in a separate **Phase C** batch job (v1.1).
 
 | Use | Criterion | Where | When |
@@ -366,7 +375,7 @@ of scope (licenses unchecked).
 | Tool | Use |
 |---|---|
 | **uv** | Project + lockfile (`uv.lock`), Python 3.12 pinned in `.python-version`, `uv run …` everywhere |
-| **ruff** | Lint + format (`ruff check`, `ruff format`); config in `pyproject.toml` |
+| **ruff** | Lint + format (`ruff check`, `ruff format`); config in `pyproject.toml`. `*.md` is excluded: ruff 0.16 also formats Python code blocks inside Markdown and rewrote this plan's snippets in M0 |
 | **ty** | Type checking (`ty check src tests`) |
 | **pytest** | Tests; markers split fast unit tests from model-backed tests |
 | **Streamlit** | UI (`uv run streamlit run app/Home.py`) |
@@ -457,7 +466,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
       - run: uv lock --check
       - run: uv run --locked --only-group lint ruff format --check
       - run: uv run --locked --only-group lint ruff check
@@ -467,7 +476,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true   # caches uv's download cache keyed on uv.lock (torch, mlx, ...)
       - run: uv sync --locked
@@ -493,8 +502,9 @@ jobs:
 - **Same commands as local and hooks:** CI runs exactly what hook H5 runs (`ruff`, `ty`, `pytest -m "not model"`). A green Stop gate locally predicts a green CI.
 - **Cost and speed:** lint runs first on the cheap Linux runner, and `test` only starts if it passes. GitHub bills macOS minutes at a
   higher rate than Linux on private repos (public repos are free). `concurrency` cancels outdated runs on the same branch.
-- **Security:** `permissions: contents: read`, no secrets used, and actions pinned to major versions (`checkout@v7`, `setup-uv@v10`, current as of
-  2026-10-03). Pin to commit SHAs if stricter supply-chain control is needed.
+- **Security:** `permissions: contents: read`, no secrets used. GitHub's own actions are pinned to major versions (`checkout@v7`,
+  `upload-artifact@v7`, `download-artifact@v8`). **`setup-uv` is pinned to the v10.2.0 commit SHA**: astral-sh publishes exact version
+  tags only, so `@v10` doesn't resolve (found in M0; the first CI run failed on it).
 - **Branch protection:** a ruleset requires `lint` and `test` to pass before merging to `main` (§4.6).
 - **Not in CI on purpose:** model golden tests, benchmarks (M1), Guardian evaluation (M7). Optional later: a `workflow_dispatch` job on a
   **self-hosted runner on the M2 Max** that runs `pytest -m model`. Dependabot / automatic upgrades are left out because dependency upgrades
@@ -529,7 +539,7 @@ CI:   lint ─► test ─► release
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0                     # need existing tags
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
       - name: Read version
         id: v
         run: echo "version=$(uv version --short)" >> "$GITHUB_OUTPUT"
@@ -605,7 +615,10 @@ have counsel confirm before commercial distribution.*
 | **Audio decoding** | `miniaudio` (MIT, already installed via mlx-vlm) decodes WAV / FLAC / MP3 / Ogg and resamples to 16 kHz mono; **M4A / AAC / AIFF / CAF** go through macOS's built-in `afconvert` first (§3.5). Homebrew's ffmpeg includes GPL components; avoiding it keeps distribution simple. ffmpeg is an optional fallback only if the user installed it, **never bundled** |
 
 **How the dependency-license guard works:**
-- **Allowed:** MIT, BSD-2/3-Clause, Apache-2.0, ISC, PSF-2.0, Zlib, HPND, 0BSD, Unlicense, MPL-2.0 (unmodified use only).
+- **Allowed:** MIT, MIT-0, BSD-2/3-Clause, Apache-2.0, ISC, PSF-2.0, Zlib, HPND, 0BSD, Unlicense, CC0-1.0, MPL-2.0 (unmodified use only),
+  plus three permissive OSI licenses found in the M0 audit: **MIT-CMU** (Pillow), **CNRI-Python** (regex), **BSL-1.0** (Boost, inside torch).
+  M0 found 146 packages and one hand-reviewed override (`pypdfium2`: free-text metadata; BSD-3-Clause OR Apache-2.0, bundled PDFium
+  build licenses all permissive).
 - **Rejected:** GPL, LGPL, AGPL, SSPL, BUSL, CC-BY-NC / non-commercial, and **unknown or missing** metadata.
 - **Exceptions** live in `licenses_overrides.toml`: package, the license confirmed by hand, and the reason. Each one is reviewed in the PR that adds it.
 - **The result:** a future `uv add` can't quietly bring in copyleft or unlicensed code. Combined with `test_config.py` (models on the

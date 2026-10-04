@@ -102,6 +102,32 @@ def attach_chart(picture: Any, rows: list[list[str]], created_by: str = "") -> N
         picture.meta.tabular_chart = chart
 
 
+def fill_table(table: Any, rows: list[list[str]]) -> None:
+    """Replace a Docling table's cells with ``rows`` (header first), so the Markdown export and the chunks use them."""
+    from docling_core.types.doc import TableCell, TableData
+
+    width = max(len(r) for r in rows)
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    cells = [
+        TableCell(
+            text=value,
+            start_row_offset_idx=r,
+            end_row_offset_idx=r + 1,
+            start_col_offset_idx=c,
+            end_col_offset_idx=c + 1,
+            column_header=r == 0,
+        )
+        for r, row in enumerate(rows)
+        for c, value in enumerate(row)
+    ]
+    table.data = TableData(num_rows=len(rows), num_cols=width, table_cells=cells)
+
+
+def is_empty_table(table: Any) -> bool:
+    """Granite-Docling sometimes finds a table but transcribes none of it (M7: dense and long tables)."""
+    return not table.data.table_cells or not any(c.text.strip() for c in table.data.table_cells)
+
+
 def is_large_enough(item: Any, minimum: float = MIN_PICTURE_SIZE) -> bool:
     """Judged on the element's own box in page units (not the padded, scaled crop)."""
     if not item.prov:
@@ -185,12 +211,16 @@ class DocumentResult:
     pictures: int = 0  # pictures found by Docling
     charts: int = 0
     tables: int = 0
+    tables_from_vision: int = (
+        0  # tables whose cells Vision supplied (accurate tables, or Docling left them empty)
+    )
     seconds: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> dict[str, Any]:
         return {
             "pages": self.pages,
             "tables": self.tables,
+            "tables_from_vision": self.tables_from_vision,
             "pictures": self.pictures,
             "charts": self.charts,
             "extractions": len(self.extractions),
@@ -266,14 +296,23 @@ class DocumentIngestor:
         seconds = {"docling": round(time.perf_counter() - start, 2)}
 
         pages = PageImages(path)
+        tables_from_vision = 0
         try:
             start = time.perf_counter()
             extractions, charts = self._charts(doc, pages, crops, out_dir)
             seconds["charts"] = round(time.perf_counter() - start, 2)
-            if tables_by_vision:
+            # Accurate tables: Vision reads every table. Otherwise only the ones Docling found but left empty, which
+            # would vanish from search (M7: Granite-Docling emits an empty <otsl> for dense and long tables).
+            # Docling's own tables, before Vision fills any: kept so the eval can score each path (§4.9).
+            own = [[[c.text for c in row] for row in t.data.grid] for t in doc.tables]
+            (out_dir / "docling_tables.json").write_text(json.dumps(own, ensure_ascii=False))
+            tables = [t for t in doc.tables if tables_by_vision or is_empty_table(t)]
+            if tables:
                 start = time.perf_counter()
-                extractions += self._tables(doc, pages, crops, out_dir)
+                found, replaced = self._tables(tables, doc, pages, crops, out_dir)
+                extractions += found
                 seconds["tables"] = round(time.perf_counter() - start, 2)
+                tables_from_vision = replaced
         finally:
             pages.close()
 
@@ -292,6 +331,7 @@ class DocumentIngestor:
             pictures=len(doc.pictures),
             charts=charts,
             tables=len(doc.tables),
+            tables_from_vision=tables_from_vision,
             seconds=seconds,
         )
 
@@ -321,9 +361,15 @@ class DocumentIngestor:
                 attach_chart(picture, extraction.data, created_by=extraction.model)
         return extractions, charts
 
-    def _tables(self, doc: Any, pages: PageImages, crops: Path, out_dir: Path) -> list[Extraction]:
-        extractions, per_page = [], {}
-        for table in doc.tables:
+    def _tables(
+        self, tables: list[Any], doc: Any, pages: PageImages, crops: Path, out_dir: Path
+    ) -> tuple[list[Extraction], int]:
+        """Vision's ``<tables_html>`` for each table; a valid result replaces the table's cells. Returns (extractions,
+        tables replaced)."""
+        from granit.ingest.vision import html_grid
+
+        extractions, per_page, replaced = [], {}, 0
+        for table in tables:
             cropped = pages.crop(table, doc)
             if cropped is None:
                 continue
@@ -331,7 +377,16 @@ class DocumentIngestor:
             per_page[page] = per_page.get(page, 0) + 1
             crop = crops / crop_name(page, "table", per_page[page])
             image.save(crop)
-            extractions.append(
-                self.vision.table_to_html(image, page=page, crop=str(crop.relative_to(out_dir)))
+            extraction = self.vision.table_to_html(
+                image, page=page, crop=str(crop.relative_to(out_dir))
             )
-        return extractions
+            extractions.append(extraction)
+            rows = (
+                [row for html in (extraction.data or []) for row in html_grid(html)]
+                if extraction.valid
+                else []
+            )
+            if rows:
+                fill_table(table, rows)
+                replaced += 1
+        return extractions, replaced

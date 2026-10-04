@@ -125,6 +125,28 @@ def test_chart_data_renders_under_the_chart_in_markdown() -> None:
     assert "tabular_chart" in str(doc.export_to_dict())  # kept in document.json too
 
 
+def test_an_empty_docling_table_is_filled_from_vision() -> None:
+    """M7: Granite-Docling found dense / long tables but emitted an empty <otsl>; Vision's cells go into the document."""
+    from docling_core.types.doc import DoclingDocument, TableData
+
+    from granit.ingest.vision import html_grid
+
+    doc = DoclingDocument(name="t")
+    table = doc.add_table(data=TableData(num_rows=0, num_cols=0))
+    assert documents.is_empty_table(table)
+    html = "<table><tr><th>Week</th><th>Boise</th></tr><tr><td>7</td><td>571</td></tr><tr><td>8</td></tr></table>"
+    documents.fill_table(table, html_grid(html))
+    assert not documents.is_empty_table(table)
+    assert [[c.text for c in row] for row in table.data.grid] == [
+        ["Week", "Boise"],
+        ["7", "571"],
+        ["8", ""],
+    ]
+    lines = doc.export_to_markdown().splitlines()
+    rows = [[c.strip() for c in line.strip("|").split("|")] for line in lines]
+    assert ["7", "571"] in rows  # in the Markdown, so searchable and cited like any table
+
+
 def test_fixture_manifest_is_consistent() -> None:
     report = MANIFEST["report.pdf"]
     assert report["pages"] == 2 and report["charts"] == 1

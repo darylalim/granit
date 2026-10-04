@@ -180,6 +180,51 @@ def build_parser() -> argparse.ArgumentParser:
     ui.add_argument("--port", type=int, default=8501, help="local port for the app (default: 8501)")
     ui.set_defaults(func=_ui)
 
+    evaluate = commands.add_parser("eval", help="quality evaluation on an eval set (PLAN.md §4.9)")
+    eval_actions = evaluate.add_subparsers(dest="eval_action", required=True)
+    run = eval_actions.add_parser(
+        "run", help="ingest, answer, judge and score a set (~15 min for public)"
+    )
+    run.add_argument(
+        "--set", default="public", help="public, private or a directory (default: public)"
+    )
+    run.add_argument(
+        "--retrieval",
+        default="hybrid+rerank",
+        choices=["bm25", "vectors", "hybrid", "hybrid+rerank"],
+    )
+    run.add_argument("--thinking", default="low", choices=["off", "low", "on"])
+    run.add_argument("--no-judge", action="store_true", help="skip Phase C (Guardian)")
+    run.add_argument(
+        "--fresh",
+        action="store_true",
+        help="re-ingest everything (after model or chunking changes)",
+    )
+    run.set_defaults(func=_eval_run)
+    compare = eval_actions.add_parser("compare", help="per-metric changes between two result files")
+    compare.add_argument("before", type=Path)
+    compare.add_argument("after", type=Path)
+    compare.set_defaults(func=_eval_compare)
+    init = eval_actions.add_parser(
+        "init", help="start a private set: folders + a questions.yaml template"
+    )
+    init.add_argument("--set", default="private")
+    init.set_defaults(func=_eval_init)
+    label = eval_actions.add_parser(
+        "label", help="tick the relevant chunks for each question → gold_refs"
+    )
+    label.add_argument("--set", default="private")
+    label.add_argument(
+        "--relabel", action="store_true", help="also questions that already have gold refs"
+    )
+    label.set_defaults(func=_eval_label)
+    agree = eval_actions.add_parser(
+        "agreement", help="hand-check Guardian's verdicts (50; ≥ 85 %% agreement to trust it)"
+    )
+    agree.add_argument("--set", default="public")
+    agree.add_argument("-n", type=int, default=50)
+    agree.set_defaults(func=_eval_agreement)
+
     from granit.bench.run import SCENARIOS
 
     bench = commands.add_parser(
@@ -425,6 +470,94 @@ def _meeting(args: argparse.Namespace) -> int:
         summary = summarize_source(store, matches[0], LLMClient(), GraniteTokens())
     print(json.dumps(summary.data, indent=2, ensure_ascii=False))
     print(f"({summary.sections} section(s), {summary.seconds:.1f} s)", file=sys.stderr)
+    return 0
+
+
+def _eval_run(args: argparse.Namespace) -> int:
+    from granit.evaluate import report
+    from granit.evaluate.dataset import EvalSetError, load_set
+    from granit.evaluate.run import EvalConfig, Runner
+
+    try:
+        eval_set = load_set(args.set)
+    except EvalSetError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    config = EvalConfig(
+        retrieval=args.retrieval, thinking=args.thinking, judge=not args.no_judge, fresh=args.fresh
+    )
+    result = Runner(
+        eval_set, config, log=lambda line: print(line, flush=True)
+    ).run()  # progress shows live in a log
+    path = report.write(result, eval_set.name if args.set in ("public", "private") else "custom")
+    print("\n".join(report.summary_lines(result)))
+    print(f"results: {path}")
+    return 0 if result["passed"] else 1
+
+
+def _eval_compare(args: argparse.Namespace) -> int:
+    from granit.evaluate import report
+
+    before, after = (json.loads(p.read_text()) for p in (args.before, args.after))
+    rows = report.compare(before, after)
+    for r in rows:
+        if r["delta"]:
+            flag = "  REGRESSION" if r["regression"] else ""
+            print(
+                f"{r['metric']:<52} {report.fmt(r['before']):>7} → {report.fmt(r['after']):>7} ({r['delta']:+.3f}){flag}"
+            )
+    regressions = [r for r in rows if r["regression"]]
+    print(f"{len(regressions)} regression(s) of 2 points or more")
+    return 1 if regressions else 0
+
+
+def _eval_init(args: argparse.Namespace) -> int:
+    from granit.evaluate.dataset import init_set
+
+    root = init_set(args.set)
+    print(
+        f"eval set in {root}: add files to files/, questions to questions.yaml, then `granit eval label --set {args.set}`"
+    )
+    return 0
+
+
+def _eval_label(args: argparse.Namespace) -> int:
+    from granit.evaluate.dataset import load_set
+    from granit.evaluate.interactive import label
+    from granit.evaluate.run import LIBRARIES, EvalConfig, default_qa
+    from granit.store.db import Store
+
+    eval_set = load_set(args.set)
+    library = LIBRARIES / eval_set.name
+    if not (library / "granit.db").is_file():
+        print(
+            f"the set isn't ingested yet: run `granit eval run --set {args.set} --no-judge` first",
+            file=sys.stderr,
+        )
+        return 1
+    store = Store(library)
+    searcher, _ = default_qa(store, EvalConfig())
+    print(f"labeled {label(eval_set, store, searcher, relabel=args.relabel)} question(s)")
+    return 0
+
+
+def _eval_agreement(args: argparse.Namespace) -> int:
+    from granit.evaluate.dataset import load_set
+    from granit.evaluate.interactive import agreement
+    from granit.evaluate.report import JUDGE_AGREEMENT_MIN
+    from granit.evaluate.run import LIBRARIES
+
+    eval_set = load_set(args.set)
+    result = agreement(eval_set, LIBRARIES / eval_set.name, n=args.n)
+    print(
+        f"{result['labeled']} labeled · agreement {result['agreement']} · Cohen's κ {result['kappa']}"
+    )
+    trusted = result["agreement"] is not None and result["agreement"] >= JUDGE_AGREEMENT_MIN
+    print(
+        "Guardian metrics now count toward the pass criteria."
+        if trusted
+        else "Guardian metrics stay informational."
+    )
     return 0
 
 

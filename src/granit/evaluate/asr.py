@@ -1,7 +1,7 @@
 """Speech recognition quality: word error rate after normalization (PLAN.md §4.9).
 
 Normalization makes formatting choices invisible: lowercase, no punctuation, common contractions expanded, and number
-words turned into digits ("twelve percent" and TurboCTC's "12%" both become "12"). ``jiwer`` (Apache-2.0) is a dev
+words turned into digits ("twelve percent" and TurboCTC's "12%" both become "12"; "$16,500" is "16500 dollars"). ``jiwer`` (Apache-2.0) is a dev
 dependency, imported lazily: WER is computed on the Mac (golden tests, ``granit eval``), never in the app.
 """
 
@@ -141,7 +141,13 @@ def words_to_numbers(words: list[str]) -> list[str]:
     return out
 
 
+_CURRENCY = re.compile(r"\$\s?(\d[\d,]*(?:\.\d+)?)")
+
+
 def normalize(text: str) -> str:
+    text = _CURRENCY.sub(
+        r"\1 dollars", text
+    )  # "$16,500" is how "sixteen thousand five hundred dollars" is written
     text = _NUMBER_SEPARATOR.sub("", text.lower().replace("’", "'").replace("%", " percent"))
     text = _NOT_WORD.sub(" ", text)
     words = []

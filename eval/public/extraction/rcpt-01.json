@@ -1,0 +1,30 @@
+{
+  "file": "files/forms/rcpt-01.png",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "merchant": {
+        "type": "string",
+        "description": "The business that issued the receipt"
+      },
+      "total": {
+        "type": "string",
+        "description": "The total paid, with currency"
+      },
+      "card_last_digits": {
+        "type": "string",
+        "description": "The last four digits of the card used"
+      },
+      "tip": {
+        "type": "string",
+        "description": "The tip amount, with currency"
+      }
+    }
+  },
+  "expected": {
+    "merchant": "Corner Bistro",
+    "total": "$84.60",
+    "card_last_digits": "4421",
+    "tip": "$20.00"
+  }
+}

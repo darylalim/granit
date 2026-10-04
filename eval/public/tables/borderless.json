@@ -1,0 +1,42 @@
+{
+  "file": "files/tables/borderless.pdf",
+  "type": "borderless",
+  "grid": [
+    [
+      "Depot",
+      "Manager",
+      "Trucks",
+      "Opened"
+    ],
+    [
+      "Tacoma",
+      "Sam Okafor",
+      "42",
+      "2015"
+    ],
+    [
+      "Portland",
+      "Elena Ruiz",
+      "35",
+      "2011"
+    ],
+    [
+      "Boise",
+      "Marcus Lee",
+      "18",
+      "2019"
+    ],
+    [
+      "Reno",
+      "Priya Raman",
+      "12",
+      "2022"
+    ],
+    [
+      "Fresno",
+      "Dana Kim",
+      "21",
+      "2017"
+    ]
+  ]
+}

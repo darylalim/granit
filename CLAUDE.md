@@ -22,6 +22,9 @@ uv run granit ask "question" [--thinking off|low|on]  # cited answer (M5; starts
 uv run granit meeting SOURCE  # meeting summary JSON (M5)
 uv run granit ui [--data DIR]  # the app: Ingest, Library, Ask, Extract (M6)
 uv run --group screenshots python scripts/ui_screenshots.py --data DIR  # §4.8 layout check (24 screenshots)
+uv run granit eval run --set public|private [--no-judge] [--fresh]  # quality eval (M7, ~15 min); results in eval/results/
+uv run granit eval compare A.json B.json  # flags regressions ≥ 2 points; run before merging model/prompt/retrieval changes
+uv run python scripts/make_eval_fixtures.py  # regenerate the public eval set (never hand-edit eval/public/)
 uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
 

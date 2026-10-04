@@ -1,0 +1,10 @@
+file: files/meetings/vendor-review.m4a
+action_items:
+- owner: Priya
+  task: send the signed renewal to procurement
+  due: Thursday
+- owner: Sam
+  task: schedule the security review with Northbeam
+  due: end of the month
+decisions:
+- Renew the Northbeam fleet tracking contract for two years

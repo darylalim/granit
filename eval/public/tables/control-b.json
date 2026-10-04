@@ -1,0 +1,48 @@
+{
+  "file": "files/tables/control-b.pdf",
+  "type": "control",
+  "grid": [
+    [
+      "Item",
+      "SKU",
+      "On hand",
+      "Reorder at",
+      "Supplier"
+    ],
+    [
+      "Pallet wrap",
+      "PW-100",
+      "340",
+      "120",
+      "Bluefin"
+    ],
+    [
+      "Box, large",
+      "BX-L",
+      "1,250",
+      "400",
+      "Bluefin"
+    ],
+    [
+      "Box, small",
+      "BX-S",
+      "2,980",
+      "800",
+      "Bluefin"
+    ],
+    [
+      "Label rolls",
+      "LB-4",
+      "96",
+      "40",
+      "Pacific Print"
+    ],
+    [
+      "Tape",
+      "TP-2",
+      "512",
+      "150",
+      "Bluefin"
+    ]
+  ]
+}

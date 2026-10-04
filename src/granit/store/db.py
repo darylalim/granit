@@ -616,6 +616,11 @@ class Store:
             )
         )
 
+    def extractions_for_job(self, job_id: int) -> list[sqlite3.Row]:
+        return list(
+            self.conn.execute("SELECT * FROM extractions WHERE job_id = ? ORDER BY id", (job_id,))
+        )
+
     def delete_source(self, source: Source) -> None:
         """Remove a source, its chunks, vectors, extractions and jobs; then its files."""
         with transaction(self.conn):

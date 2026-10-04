@@ -1,0 +1,35 @@
+{
+  "file": "files/forms/exp-01.pdf",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "employee_name": {
+        "type": "string",
+        "description": "The employee claiming expenses"
+      },
+      "employee_id": {
+        "type": "string",
+        "description": "The employee ID"
+      },
+      "trip_purpose": {
+        "type": "string",
+        "description": "What the trip was for"
+      },
+      "total_claimed": {
+        "type": "string",
+        "description": "The total amount claimed, with currency"
+      },
+      "approved_by": {
+        "type": "string",
+        "description": "The manager who approved the report"
+      }
+    }
+  },
+  "expected": {
+    "employee_name": "Marcus Lee",
+    "employee_id": "E-2291",
+    "trip_purpose": "Chicago customer visit",
+    "total_claimed": "$1,486.20",
+    "approved_by": "Elena Ruiz"
+  }
+}

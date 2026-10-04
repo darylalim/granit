@@ -13,6 +13,7 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from typing import Any
 
 from granit.config import HUB_MODELS
@@ -81,6 +82,76 @@ def parse_tables_html(text: str) -> list[str]:
     if not tables or not all(re.search(r"<t[dh]\b", t, re.IGNORECASE) for t in tables):
         raise VisionOutputError("no HTML table with cells in the output")
     return tables
+
+
+class _Grid(HTMLParser):
+    """An HTML table → a grid of cell texts, with rowspan / colspan expanded (the text repeated in every covered cell)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[list[str]] = []
+        self.spans: dict[tuple[int, int], str] = {}  # (row, col) filled by a rowspan from above
+        self._cell: list[str] | None = None
+        self._span = (1, 1)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "tr":
+            self.rows.append([])
+        elif tag in ("td", "th"):
+            a = dict(attrs)
+            self._span = (_int(a.get("rowspan")), _int(a.get("colspan")))
+            self._cell = []
+        elif tag == "br" and self._cell is not None:
+            self._cell.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("td", "th") and self._cell is not None:
+            if not self.rows:
+                self.rows.append([])
+            text = " ".join("".join(self._cell).split())
+            r = len(self.rows) - 1
+            row = self.rows[r]
+            rowspan, colspan = self._span
+            for _ in range(colspan):
+                while (r, len(row)) in self.spans:
+                    row.append(self.spans.pop((r, len(row))))
+                c = len(row)
+                row.append(text)
+                for dr in range(1, rowspan):
+                    self.spans[(r + dr, c)] = text
+            self._cell = None
+        elif tag == "tr" and self.rows:
+            r, row = len(self.rows) - 1, self.rows[-1]
+            while (r, len(row)) in self.spans:
+                row.append(self.spans.pop((r, len(row))))
+
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def _int(value: str | None) -> int:
+    try:
+        return max(1, int(value or 1))
+    except ValueError:
+        return 1
+
+
+def html_grid(html: str) -> list[list[str]]:
+    parser = _Grid()
+    parser.feed(html)
+    rows = parser.rows
+    # rows that only exist because of rowspans from above
+    while parser.spans:
+        r = min(k[0] for k in parser.spans)
+        while len(rows) <= r:
+            rows.append([])
+        row = rows[r]
+        while (r, len(row)) in parser.spans:
+            row.append(parser.spans.pop((r, len(row))))
+        if any(k[0] == r for k in parser.spans):  # a gap: fill and continue
+            row.append("")
+    return [row for row in rows if row]
 
 
 def parse_json_object(text: str) -> dict[str, Any]:

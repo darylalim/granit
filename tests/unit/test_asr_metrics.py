@@ -34,10 +34,19 @@ def test_normalize_punctuation_case_contractions_and_numbers() -> None:
         normalize("Let's meet at TEN; revenue was up 12%!")
         == "let us meet at 10 revenue was up 12 percent"
     )
-    assert normalize("Invoice INV-2026-0042 totals $4,980.") == "invoice inv 2026 0042 totals 4980"
+    assert (
+        normalize("Invoice INV-2026-0042 totals $4,980.")
+        == "invoice inv 2026 0042 totals 4980 dollars"
+    )
     assert (
         normalize("It’s Priya’s turn") == "it is priyas turn"
     )  # possessive apostrophes dropped: "priyas" either way
+
+
+def test_written_amounts_match_spoken_ones() -> None:
+    """TurboCTC writes "$16500" for "sixteen thousand five hundred dollars" (M7: vendor-review)."""
+    assert normalize("$16,500 a year") == normalize("sixteen thousand five hundred dollars a year")
+    assert normalize("$4,980.50") == normalize("4980.50 dollars")
 
 
 def test_wer_ignores_formatting_but_counts_real_errors() -> None:

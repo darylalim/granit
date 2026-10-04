@@ -1,0 +1,36 @@
+{
+  "file": "files/tables/control-a.pdf",
+  "type": "control",
+  "grid": [
+    [
+      "Carrier",
+      "Shipments",
+      "On time",
+      "Claims"
+    ],
+    [
+      "Harbor Freight Partners",
+      "1,204",
+      "96.1%",
+      "7"
+    ],
+    [
+      "Bay Line Trucking",
+      "882",
+      "93.4%",
+      "11"
+    ],
+    [
+      "Atlas Rail",
+      "415",
+      "90.2%",
+      "3"
+    ],
+    [
+      "Coastal Air Cargo",
+      "236",
+      "98.7%",
+      "1"
+    ]
+  ]
+}

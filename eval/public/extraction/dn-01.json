@@ -1,0 +1,36 @@
+{
+  "file": "files/forms/dn-01.pdf",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "delivery_note_number": {
+        "type": "string",
+        "description": "The delivery note number"
+      },
+      "ship_date": {
+        "type": "string",
+        "description": "The date the goods were shipped",
+        "format": "date"
+      },
+      "tracking_number": {
+        "type": "string",
+        "description": "The carrier's tracking number"
+      },
+      "packages": {
+        "type": "string",
+        "description": "How many packages were delivered"
+      },
+      "received_by": {
+        "type": "string",
+        "description": "Who signed for the delivery"
+      }
+    }
+  },
+  "expected": {
+    "delivery_note_number": "DN-55120",
+    "ship_date": "2026-09-24",
+    "tracking_number": "HFP-TRK-9917342",
+    "packages": "14",
+    "received_by": "Sam Okafor"
+  }
+}

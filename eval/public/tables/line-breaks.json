@@ -1,0 +1,26 @@
+{
+  "file": "files/tables/line-breaks.pdf",
+  "type": "line breaks in cells",
+  "grid": [
+    [
+      "Site",
+      "Address",
+      "Contact"
+    ],
+    [
+      "Tacoma",
+      "1800 Port Way Tacoma, WA 98421",
+      "Sam Okafor +1 253 555 0110"
+    ],
+    [
+      "Portland",
+      "400 Harbor Road Portland, ME 04101",
+      "Elena Ruiz +1 207 555 0142"
+    ],
+    [
+      "Boise",
+      "75 Airport Blvd Boise, ID 83705",
+      "Marcus Lee +1 208 555 0177"
+    ]
+  ]
+}

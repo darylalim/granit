@@ -105,6 +105,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     transcribe.set_defaults(func=_transcribe)
 
+    convert = commands.add_parser(
+        "convert", help="convert PDFs / images to Markdown + chart data (Docling + Granite Vision)"
+    )
+    convert.add_argument("files", nargs="+", type=Path, metavar="FILE")
+    convert.add_argument(
+        "--out", type=Path, default=Path("converted"), metavar="DIR", help="writes DIR/<file stem>/"
+    )
+    convert.add_argument(
+        "--vision-tables",
+        action="store_true",
+        help="also re-extract every table with Granite Vision (slow)",
+    )
+    convert.set_defaults(func=_convert)
+
+    extract = commands.add_parser(
+        "extract", help="extract fields from a document with a JSON Schema (Granite Vision)"
+    )
+    extract.add_argument("file", type=Path, metavar="FILE")
+    extract.add_argument("--schema", type=Path, required=True, metavar="SCHEMA.json")
+    extract.add_argument(
+        "--pages", type=int, default=4, help="at most this many PDF pages (default 4)"
+    )
+    extract.set_defaults(func=_extract)
+
     from granit.bench.run import SCENARIOS
 
     bench = commands.add_parser(
@@ -143,6 +167,52 @@ def _transcribe(args: argparse.Namespace) -> int:
             out.write_text(json.dumps(transcript.to_json(), indent=2) + "\n")
             print(f"   → {out}")
     return 1 if failed else 0
+
+
+def _convert(args: argparse.Namespace) -> int:
+    from granit.ingest.documents import DocumentIngestor, UnsupportedDocument
+
+    ingestor = DocumentIngestor(vision_tables=args.vision_tables).load()
+    failed = 0
+    for path in args.files:
+        out = args.out / path.stem
+        try:
+            result = ingestor.ingest(path, out)
+        except (UnsupportedDocument, FileNotFoundError) as exc:
+            print(f"✗ {path}: {exc}", file=sys.stderr)
+            failed += 1
+            continue
+        summary = result.summary()
+        print(
+            f"── {path.name}: {summary['pages']} pages, {summary['tables']} tables, "
+            f"{summary['charts']} charts of {summary['pictures']} pictures → {out}/document.md"
+        )
+        for e in result.extractions:
+            mark = "✓" if e.valid else "✗"
+            print(
+                f"   {mark} p{e.page} {e.kind} ({e.format}, {e.seconds:.1f} s) {'; '.join(e.errors)}"
+            )
+        (out / "extractions.json").write_text(
+            json.dumps([e.to_json() for e in result.extractions], indent=2, ensure_ascii=False)
+            + "\n"
+        )
+    return 1 if failed else 0
+
+
+def _extract(args: argparse.Namespace) -> int:
+    from granit.ingest.documents import check_format, render_pages
+    from granit.ingest.vision import VisionModel, check_schema
+
+    schema = json.loads(args.schema.read_text())
+    check_schema(schema)  # a bad schema fails before any model loads
+    check_format(args.file)
+    extraction = VisionModel().load().extract_fields(render_pages(args.file, args.pages), schema)
+    print(json.dumps(extraction.data, indent=2, ensure_ascii=False))
+    if extraction.missing:
+        print(f"not found: {', '.join(extraction.missing)}", file=sys.stderr)
+    if not extraction.valid:
+        print("invalid: " + "; ".join(extraction.errors), file=sys.stderr)
+    return 0 if extraction.valid else 1
 
 
 def _bench(args: argparse.Namespace) -> int:

@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v21 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v22 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v21: M0, M1 and M2 (audio ingest) done; 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v22: M0, M1, M2 (audio) and M3 (documents) done; 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -67,6 +67,11 @@ the fallback if M7 finds sectioned summaries miss things.
 **Changes in v21 (M2):** audio ingest built (§3.5). **Word timestamps from the CTC frames** (TurboCTC returns text only), so
 segments are per sentence rather than per 30 s chunk and overlap windows are stitched by time; WER normalization handles number
 words, contractions and `%`; format decoding is unit-tested in CI. Measured: fixtures WER 0.0, LibriSpeech WER 4.3 %, RTF ~0.01.
+**Changes in v22 (M3):** document ingest built (§3.6). **PDFs render through pypdfium2** (Docling's default renderer made
+Granite-Docling miss a scanned page); **picture crops come from our own render** (Docling's were offset); charts are detected by asking
+Vision yes/no and their CSV is attached as `meta.tabular_chart`, so chart data appears in the Markdown under the chart; **tables stay
+Docling's by default** (equal accuracy on the card's table, 8× faster; M7 decides); form extraction normalizes dates to ISO 8601 and
+treats nulls as missing.
 ---
 
 ## 1. Scope (v1)
@@ -449,6 +454,42 @@ can't extend it). Without it, the meeting fixture scored 6.2 % on formatting alo
 **Later (v2 voice input):** mlx-audio also has `realtime_vad` (streaming endpointing) and `smart_turn` (end-of-turn detection) for
 microphone input. Their weights' licenses get checked when v2 starts. Speaker diarization (`sortformer`, `nemotron_diarization`) stays out
 of scope (licenses unchecked).
+
+### 3.6 Documents: Docling + Granite Vision (built in M3)
+
+**Pipeline (`ingest/documents.py`, `ingest/vision.py`)**
+1. **Docling VLM pipeline** (Granite-Docling 258M on MLX) → `DoclingDocument` (text, tables with cells, pictures; page provenance for
+   citations) → `document.json` + `document.md`. Inputs: PDF (digital or scanned) and images (PNG, JPEG, TIFF, WebP, BMP).
+   **PDF pages are rendered by pypdfium2** (`PyPdfiumDocumentBackend`): with Docling's default backend (docling-parse) a scanned page
+   rendered slightly darker and softer, and Granite-Docling then output only the logo and stopped (direct model calls on the same page
+   rendered by pypdfium2 read it fully). Digital PDFs convert identically with either backend.
+2. **Pictures:** each picture at least **72 page units** on both sides (one inch on a PDF; logos and icons are skipped) is **cropped from
+   our own page render** (pypdfium2 at 3×, 216 dpi; images at native size; 1.5 % padding). Docling's own picture crops came out offset
+   at `images_scale` > 1. Granite Vision then answers *"Is this image a chart …? yes or no"* (0.6–1.6 s; no extra classifier model).
+3. **Charts** → `<chart2csv>` → the rows are attached to the picture as `meta.tabular_chart` (with `created_by` = Vision + revision), so
+   the **chart's data appears as a table right under it in the Markdown** and in `document.json`: searchable and citable by page.
+4. **Tables stay as Docling extracted them** by default (`DOCUMENT_VISION_TABLES = False` in `config.py`). On the card's table both Docling
+   and Vision `<tables_html>` got **96/96 values right**, but Docling took 3.4 s for the whole page and Vision 29 s for the one table.
+   The Vision path is built and tested (`granit convert --vision-tables`); **M7's table cell F1 decides the default.**
+5. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
+   valid, errors, page, crop, model + revision), ready for the `extractions` table (M4).
+
+**Form extraction (`VisionModel.extract_fields`, `granit extract FILE --schema S.json`)**
+- The model card's **VAREX prompt** with the user's JSON Schema; the schema is checked before any model time is spent (must be an object).
+- **Null = not found:** null fields are reported as `missing`, not errors; a missing `required` field is an error.
+- **Dates:** Granite Vision rewrites dates in its own formats (`2026-09-14` came back as `14/09/2026`, `2026-10-14` as `10-14-2026`;
+  a schema hint didn't help). For `"format": "date"` fields, unambiguous dates are normalized to ISO 8601 (day/month order only when a
+  part is > 12; month names understood) and then **format-checked**: an ambiguous `03/04/2026` is kept and flagged, never guessed.
+- **PDFs:** up to 4 pages (`--pages`) are extracted page by page and merged field by field (first non-null wins).
+
+**Measured in M3:** the card's chart → CSV exact (10/10 values), table 96/96 (Docling and Vision), invoice fields exact; the scanned
+2-page report: text, table and chart (4/4 values) exact, logo skipped; the digital memo exact; the generated invoice (PNG and PDF):
+all 6 fields exact with ISO dates, absent field reported missing. Docling ≈ 1.2–2.7 s per page; chart check + extraction ≈ 4.5–5.6 s.
+
+**Tests:** unit (`test_vision_outputs.py`, `test_documents.py`, no models: CSV / HTML / JSON parsing, the VAREX prompt, schema checks,
+null handling, required fields, date normalization + format checks, page merging, crop geometry, page rendering, chart data in Markdown);
+golden (`tests/models/test_documents.py`): the card's three examples plus the generated scanned report, digital memo and invoice.
+Fixtures: `scripts/make_document_fixtures.py` (Pillow + macOS Helvetica; the memo is printed by headless Chrome).
 
 ## 4. Development toolchain
 
@@ -1318,6 +1359,8 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Phase switches feel slow if jobs trickle in one at a time | Batch queued jobs; "Process now" button. **M1: B→A 7.6–8.9 s, A→B 6.5–6.7 s** (§2.1) |
 | A crashed ingest job leaves Q&A down | Phase manager always restarts `mlx_lm.server` (`try/finally`); failed jobs marked and kept for retry |
 | The mlx-vlm Vision port could differ from the reference Transformers output (DeepStack injection) | Golden tests against the card's example outputs; compare one sample with Transformers on MPS if needed |
+| Chart detection misses a chart (Vision answers "no") or charts a photo | Yes/no check measured on the card's chart and logo; misses leave the image as a placeholder (no wrong data); M7 public set adds charts of several types |
+| Vision rewrites field values (dates seen in M3) | `format: date` normalization + format check; ambiguous dates flagged, never guessed; M7 field accuracy |
 | Tight transformers version window (≥ 5.16, Docling excludes some 5.x) | Commit `uv.lock`; upgrade deliberately |
 | MLX in Streamlit threads | Models only in the worker process / `mlx_lm.server` (by design) |
 | Thinking mode slows answers | `reasoning_effort: "low"` by default; a per-question toggle in the UI. M1: Granite 4.2 thinks unless `enable_thinking: false` |
@@ -1369,6 +1412,7 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Memory strategy | **Phase switching**: ingest (A: Speech + Docling + Vision bf16, 15.6 GB measured), Q&A (B: 8B q8, **16K context cap**; ~15 GB for RAG, 19.3 GB at the cap, with the 2 GB prompt-cache cap + 1 GB MLX cache limit) and verify (C, v1.1: Guardian q8, 12.4 GB) take turns, under the 26.8 GB GPU limit (§3.3) |
 | LLM context | **16K tokens per request** (prompt ≤ 14,336 + output ≤ 2,048), enforced by the M5 prompt builder; meetings over ~1 hour summarized in sections; fallback `--kv-bits 8` at 32K if M7 shows sectioned summaries miss things |
 | Audio | Decode: miniaudio (WAV/FLAC/MP3/Ogg) + macOS `afconvert` (M4A/AAC/AIFF/CAF), no ffmpeg; **Silero VAD v6 (MIT, via mlx-audio)** splits at pauses into ≤ 30 s chunks; TurboCTC per chunk; timestamped segments |
+| Documents | Granite-Docling via Docling (pypdfium2 page rendering) → Markdown + `document.json`; pictures ≥ 72 pt → Vision yes/no chart check → `<chart2csv>` into `meta.tabular_chart`; tables from Docling unless `DOCUMENT_VISION_TABLES`; forms: VAREX prompt + JSON Schema, dates → ISO 8601 (§3.6) |
 | Search | **Hybrid + rerank**: SQLite FTS5 BM25 + Granite Embedding English R2 vectors (fp16 matrix on MPS, 1 ms at 150K) → RRF → Granite Reranker English R2 (555 ms for 30 pairs) → top-8 |
 | Storage | **SQLite** (WAL, one transaction per job) + FTS5 (code tokenizer) + trigram ID index + float16 vectors in NumPy (sqlite-vec later); files on disk by sha256. Postgres + pgvector only if multi-user |
 | Verification | **Granite Guardian 4.1 8B (local MLX q8)**: M7 evaluation in v1; batch verify job (Phase C) in v1.1; never loaded with the Q&A LLM; no-think; `yes_means` per criterion |

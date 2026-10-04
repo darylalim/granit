@@ -27,6 +27,9 @@ LLM_PORT = int(os.environ.get("GRANIT_LLM_PORT", "8765"))
 # byte limit, and MLX keeps freed KV-growth buffers cached; either can push Phase B past the GPU limit.
 LLM_PROMPT_CACHE_BYTES = "2GB"
 LLM_MLX_CACHE_LIMIT_GB = 1.0
+# Documents (M3): Granite-Docling's own tables matched Vision's exactly on the card's table (96/96 values) in 3.4 s for
+# the page vs 29 s for Vision on one table, so Vision re-extracts tables only when this is on. M7 (table cell F1) decides.
+DOCUMENT_VISION_TABLES = False
 GUARDIAN_CONTEXT_TOKENS = 8_192
 EMBEDDING_DIM = 768
 

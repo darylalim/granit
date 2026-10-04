@@ -12,6 +12,7 @@ uv run pytest -m model                    # model smoke/golden tests on the Mac 
 uv run ruff format && uv run ruff check   # format + lint
 uv run ty check src tests                 # types
 uv run granit models list|download|convert|smoke
+uv run granit transcribe FILE… [--json DIR]  # audio → timestamped segments (M2)
 uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
 

@@ -26,6 +26,12 @@ Model tests run on the Mac with `uv run pytest -m model`, and benchmarks with `u
 (about 15 minutes; run it after model or dependency changes and compare with `bench/results/`). Close the app first, because only one phase may hold
 models at a time.
 
+## Test fixtures
+
+Audio fixtures in `tests/fixtures/audio/` are generated, not recorded: `uv run python scripts/make_audio_fixtures.py`
+(macOS `say` + `afconvert`; MP3 / Ogg need ffmpeg). Regenerate after changing the script and commit the output.
+See `tests/README.md` for third-party test data credits.
+
 ## Licensing
 
 granit is Apache-2.0. Contributions are accepted under the same license (Apache-2.0 §5), so no CLA is needed.

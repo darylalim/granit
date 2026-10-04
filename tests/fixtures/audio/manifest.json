@@ -1,0 +1,39 @@
+{
+  "voice": "Samantha",
+  "sample_rate": 16000,
+  "vad_pauses.wav": {
+    "reference": "Please send the revised invoice to Finance before Friday. Marcus will confirm the delivery date with the warehouse team.",
+    "expected_speech": [
+      [
+        2.0,
+        5.113
+      ],
+      [
+        8.113,
+        11.243
+      ]
+    ],
+    "duration_s": 12.743
+  },
+  "meeting.flac": {
+    "reference": "Good morning everyone, let's start with the budget review. Priya, can you share the numbers from last quarter? Sure, revenue was up twelve percent and costs stayed flat. Great. The main open item is the contract with the shipping vendor. Legal still needs to review the termination clause. Marcus, please send the draft to Legal by Wednesday. Elena will update the customer forecast before the next meeting. Let's meet again on Tuesday at ten to make a final decision.",
+    "duration_s": 31.13
+  },
+  "continuous.flac": {
+    "reference": "and then the team reviewed the budget and the vendor list and the shipping plan and the contract terms and the travel schedule and the hiring targets and the office move and the security audit and the customer survey and the product roadmap and the training sessions and the quarterly forecast and the pricing changes and the support backlog and the marketing calendar and the partner agreements and the release checklist and the warranty claims and the inventory counts and the safety review and the onboarding guide and the data retention policy and the expense reports and the cloud migration and the network upgrade and the printer contracts and the parking permits and the holiday rota",
+    "duration_s": 32.632
+  },
+  "formats": {
+    "reference": "The quarterly invoice for twelve server racks is due on Friday, and Legal must approve the contract before the warehouse can ship the order to the customer.",
+    "files": [
+      "sample.aiff",
+      "sample.caf",
+      "sample.flac",
+      "sample.m4a",
+      "sample.mp3",
+      "sample.ogg",
+      "sample.wav"
+    ],
+    "duration_s": 8.127
+  }
+}

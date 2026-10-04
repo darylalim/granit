@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from granit.config import HUB_MODELS, LOCAL_MODELS, RUNTIME_HUB_MODELS
 
@@ -94,6 +96,15 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("keys", nargs="*", choices=[[], *CHECKS], metavar="KEY")
     smoke.set_defaults(func=_models_smoke)
 
+    transcribe = commands.add_parser(
+        "transcribe", help="transcribe audio files (VAD + TurboCTC) and print timestamped segments"
+    )
+    transcribe.add_argument("files", nargs="+", type=Path, metavar="FILE")
+    transcribe.add_argument(
+        "--json", type=Path, metavar="DIR", help="also write <DIR>/<file stem>.transcript.json"
+    )
+    transcribe.set_defaults(func=_transcribe)
+
     from granit.bench.run import SCENARIOS
 
     bench = commands.add_parser(
@@ -105,6 +116,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bench.set_defaults(func=_bench)
     return parser
+
+
+def _transcribe(args: argparse.Namespace) -> int:
+    from granit.ingest.audio import AudioError, AudioTranscriber, timestamp
+
+    transcriber = AudioTranscriber().load()  # models load once for every file
+    failed = 0
+    for path in args.files:
+        try:
+            transcript = transcriber.transcribe(path)
+        except (AudioError, FileNotFoundError) as exc:
+            print(f"✗ {path}: {exc}", file=sys.stderr)
+            failed += 1
+            continue
+        print(
+            f"── {path.name}: {timestamp(transcript.duration_s)} long, "
+            f"{transcript.speech_s:.0f} s speech / {transcript.silence_s:.0f} s silence, "
+            f"{len(transcript.segments)} segments"
+        )
+        for segment in transcript.segments:
+            print(f"[{timestamp(segment.start)}] {segment.text}")
+        if args.json:
+            args.json.mkdir(parents=True, exist_ok=True)
+            out = args.json / f"{path.stem}.transcript.json"
+            out.write_text(json.dumps(transcript.to_json(), indent=2) + "\n")
+            print(f"   → {out}")
+    return 1 if failed else 0
 
 
 def _bench(args: argparse.Namespace) -> int:

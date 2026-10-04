@@ -28,7 +28,8 @@ LLM_PORT = int(os.environ.get("GRANIT_LLM_PORT", "8765"))
 LLM_PROMPT_CACHE_BYTES = "2GB"
 LLM_MLX_CACHE_LIMIT_GB = 1.0
 # Documents (M3): Granite-Docling's own tables matched Vision's exactly on the card's table (96/96 values) in 3.4 s for
-# the page vs 29 s for Vision on one table, so Vision re-extracts tables only when this is on. M7 (table cell F1) decides.
+# the page vs 29 s for Vision on one table, so Vision re-extracts tables only when this is on. M7 decides by the rule in
+# PLAN.md §4.9 ("Tables: Docling vs Vision"): switch only if Vision wins by >= 3 points of table cell F1.
 DOCUMENT_VISION_TABLES = False
 GUARDIAN_CONTEXT_TOKENS = 8_192
 EMBEDDING_DIM = 768

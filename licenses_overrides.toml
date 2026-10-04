@@ -1,0 +1,11 @@
+# Hand-reviewed license exceptions for the dependency-license guard (PLAN.md §4.4).
+# Each entry needs `license` (an SPDX expression that must itself be on the allow-list) and `reason`.
+# Add entries only in a PR that explains the review.
+
+[pypdfium2]
+license = "BSD-3-Clause OR Apache-2.0"
+reason = """Metadata is free text ("BSD-3-Clause, Apache-2.0, dependency licenses"). Reviewed 2026-10-04:
+bindings are BSD-3-Clause / Apache-2.0 (docs CC-BY-4.0); the bundled PDFium build's licenses in
+dist-info/licenses/data/*/BUILD_LICENSES (abseil, agg23, fast_float, FreeType under its FTL option, ICU,
+lcms, libjpeg-turbo, libopenjpeg, libpng, llvm-libc, simdutf, zlib) are all permissive.
+Pulled in by docling."""

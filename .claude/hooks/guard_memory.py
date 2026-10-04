@@ -11,13 +11,13 @@ from pathlib import Path
 
 from _hooklib import block, python_module, read_input, run, split_commands, tool_input
 
-MODEL_CLI_COMMANDS = {"ingest", "eval", "verify", "bench"}
+MODEL_CLI_COMMANDS = {"ingest", "eval", "verify", "bench", "transcribe"}
 MODEL_CLI_MODEL_ACTIONS = {"smoke", "convert"}
 MLX_PREFIXES = ("mlx_lm", "mlx_vlm", "mlx_audio")
 # Extended regex for `pgrep -f`: processes that hold a phase's models in memory.
 RUNNING_PHASE_PATTERN = (
     r"mlx_lm[. ]server|granit\.ingest\.worker|granit\.verify\.worker|granit\.models\.smoke|granit\.bench\.workers|granit\.models\.mlx_server"
-    r"|granit (ingest|eval|verify|bench)|granit models (smoke|convert)"
+    r"|granit (ingest|eval|verify|bench|transcribe)|granit models (smoke|convert)"
 )
 
 

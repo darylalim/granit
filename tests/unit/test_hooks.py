@@ -201,6 +201,7 @@ def test_protect_paths_end_to_end(project: Path) -> None:
         "python -m mlx_audio.stt.generate --audio a.wav",
         "python -m granit.models.smoke llm",
         "uv run granit bench",
+        "uv run granit transcribe meeting.m4a",
         "uv run granit bench phase-b --quick",
         "python -m granit.bench.workers phase-a --hold",
         "python -m mlx_lm server --model x",

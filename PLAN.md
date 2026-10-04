@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v20 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v21 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v20: M0 done (released `v0.1.0.dev0`), M1 benchmarks done, 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v21: M0, M1 and M2 (audio ingest) done; 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -64,6 +64,9 @@ warm-up request after `/health`.
 **Changes in v20:** **one LLM request is capped at 16K tokens** (was 32K), decided after M1: Phase B peaks at **19.3 GB** at the cap
 (23.5 GB at 30K), and a 30K prompt took 2.3 min to read. Meetings over about an hour are summarized in sections (§3.3); 8-bit KV is
 the fallback if M7 finds sectioned summaries miss things.
+**Changes in v21 (M2):** audio ingest built (§3.5). **Word timestamps from the CTC frames** (TurboCTC returns text only), so
+segments are per sentence rather than per 30 s chunk and overlap windows are stitched by time; WER normalization handles number
+words, contractions and `%`; format decoding is unit-tested in CI. Measured: fixtures WER 0.0, LibriSpeech WER 4.3 %, RTF ~0.01.
 ---
 
 ## 1. Scope (v1)
@@ -404,22 +407,44 @@ decode(path):  .wav .flac .mp3 .ogg        → miniaudio (in-process) → 16 kHz
                anything else               → clear error ("convert to WAV or M4A"); ffmpeg only if the user installed it
 ```
 
-**Pipeline (`ingest/audio.py`)**
-1. **Decode** → 16 kHz mono (above).
-2. **VAD:** `mlx_audio.vad.load(<silero-vad-v6, pinned revision>)` → `get_speech_timestamps(..., return_seconds=True)`.
-3. **Chunk:** pad each segment by ~0.3 s, then merge neighboring segments into chunks of **at most ~30 s**, **splitting at the longest
-   pauses**. If continuous speech runs past 30 s with no pause, fall back to a fixed split with ~1 s overlap and remove the duplicated words.
-4. **Transcribe** each chunk with TurboCTC; offset timestamps by the chunk start.
-5. **Store** `transcript.json` segments (start / end / text) and index them as `chunks` with `start_s` / `end_s`, which become citations like
-   "Tuesday call · 12:40".
-6. **Report** total speech vs silence time per file on the Library page (helps spot a silent or broken recording).
+**Pipeline (`ingest/audio.py`, built in M2)**
+1. **Decode** → 16 kHz mono (above). A WAV whose codec miniaudio can't read (e.g. μ-law) falls back to `afconvert`.
+2. **VAD:** `mlx_audio.vad.load(<silero-vad-v6, pinned revision>)` → `get_speech_timestamps(..., return_seconds=True)` with the model's
+   defaults (threshold 0.5, min silence 100 ms). Silero splits continuous speech about every 10 s with ~0.1 s gaps; padding merges them.
+3. **Chunk:** pad each segment by 0.3 s, then merge neighboring segments into chunks of **at most 30 s**, **splitting at the longest
+   pauses** (recursively). If continuous speech runs past 30 s with no pause, fall back to fixed windows with a 1 s overlap.
+4. **Transcribe** each chunk with TurboCTC, **with word timestamps.** TurboCTC's `generate()` returns text only, so `AudioTranscriber.words()`
+   runs the same greedy CTC decode and keeps each token's frame (**80 ms per frame**); tokens are grouped into words at the BPE
+   word-start marker (`Ġ`). A golden test asserts the text is identical to `generate()` (the code uses mlx-audio 0.5.7's
+   `_tokenizer` and `compute_features`).
+5. **Stitch overlaps by time:** each word in an overlap is kept from the window whose half contains its start; a word repeated within 0.4 s
+   across the seam is dropped (CTC timing is least precise at a window's edge: the continuous fixture produced "and the the printer").
+6. **Segments** (the citation unit) break at pauses and are at most 30 s: one per spoken sentence on the meeting fixture.
+   `transcript.json` (via `Transcript.to_json()`) keeps every word's time, so citations like "Tuesday call · 12:40" can point at the word.
+7. **Report** total speech vs silence time per file (`Transcript.speech_s` / `silence_s`) for the Library page.
+
+`granit transcribe FILE… [--json DIR]` runs the pipeline from the command line (M4 wires it into the ingest worker and the store).
+
+**Measured in M2:** every fixture (TTS) **WER 0.0**; **LibriSpeech (73 clips, 8 min of read speech) WER 4.3 %**, transcribed in 4.5 s
+(real-time factor ~0.01). VAD boundaries within 0.1 s of the truth.
+
+**WER normalization (`evaluate/asr.py`)** so formatting isn't counted as error: lowercase, punctuation removed (digits kept together:
+`4,980` → `4980`), `%` → "percent", common contractions expanded ("let's" → "let us", which TurboCTC writes), possessive apostrophes
+dropped, and **number words → digits** ("twelve percent" = "12%"; "twenty twenty six" → `20 26`, since a number ends when the next word
+can't extend it). Without it, the meeting fixture scored 6.2 % on formatting alone.
 
 **Tests**
-- **Unit** (`test_audio_chunking.py`, no models): merge/split logic on made-up segments (longest-pause split, ≤ 30 s cap,
-  overlap fallback, padding at the start and end of the file); the format routing table.
-- **Golden** (`-m model`): the `say`-generated file → exactly 2 segments, gap detected, boundaries within ±0.5 s; a LibriSpeech clip → WER below a threshold;
-  **one file per supported format** (WAV, FLAC, MP3, M4A) → identical 16 kHz mono output length (±1 %).
-- Fixtures are generated by `scripts/make_audio_fixtures.py` (macOS `say` + `afconvert`), so no third-party recordings and no licensing questions.
+- **Unit** (`test_audio_chunking.py`, `test_asr_metrics.py`, no models): format routing; **decoding every format** (WAV, FLAC, MP3, Ogg,
+  M4A, AIFF, CAF → identical 16 kHz mono length, within 1 %; these need only miniaudio and `afconvert`, so they run in CI rather than as
+  golden tests); the μ-law fallback; clear decode errors; padding / merging; longest-pause split; the 30 s cap; overlap windows; CTC
+  collapse and word grouping; seam stitching; segments; JSON round trip; number words and normalization.
+- **Golden** (`-m model`, `tests/models/test_audio.py`): VAD finds both phrases with boundaries within ±0.5 s; our timed decode equals
+  `generate()`; word times fall inside speech; meeting WER ≤ 0.05 with one segment per sentence; continuous speech uses the overlap with
+  WER ≤ 0.05 and no duplicated word; every format WER ≤ 0.05; LibriSpeech WER ≤ 0.10 (downloaded at test time, skipped offline).
+- Fixtures are generated by `scripts/make_audio_fixtures.py` (macOS `say` voice *Samantha* + `afconvert`; MP3 / Ogg via ffmpeg at
+  generation time only), so no third-party recordings and no licensing questions. `manifest.json` holds references and expected boundaries.
+- **Phase A note for the ingest worker (M4):** set an MLX cache limit there, as `mlx_server` does for Phase B: M1 measured Phase A
+  peaking at 15.6 GB from cached buffers.
 
 **Later (v2 voice input):** mlx-audio also has `realtime_vad` (streaming endpointing) and `smart_turn` (end-of-turn detection) for
 microphone input. Their weights' licenses get checked when v2 starts. Speaker diarization (`sortformer`, `nemotron_diarization`) stays out

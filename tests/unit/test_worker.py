@@ -34,8 +34,10 @@ class FakeTranscriber:
 class FakeDocuments:
     def __init__(self) -> None:
         self.vision = SimpleNamespace(extract_fields=self.extract_fields)
+        self.table_modes: list[bool | None] = []
 
-    def ingest(self, path: Path, out: Path) -> Any:
+    def ingest(self, path: Path, out: Path, vision_tables: bool | None = None) -> Any:
+        self.table_modes.append(vision_tables)
         chart = Extraction(
             "chart",
             "csv",
@@ -67,7 +69,7 @@ def worker(store: Store, **kw: Any) -> IngestWorker:
     return IngestWorker(
         store,
         transcriber=kw.get("transcriber", FakeTranscriber()),
-        documents=FakeDocuments(),
+        documents=kw.get("documents", FakeDocuments()),
         embedder=FakeEmbedder(),
         mlx_cache_limit_gb=None,
     )
@@ -111,6 +113,18 @@ def test_worker_ingests_audio_and_documents(store: Store) -> None:
     (chart,) = store.extractions(doc.id)
     assert chart["kind"] == "chart" and chart["page"] == 2 and chart["model"] == "vision@rev"
     assert any(line.startswith("✓ ingest report.pdf") for line in logs)
+
+
+def test_accurate_tables_is_a_per_upload_choice(store: Store) -> None:
+    plain, _ = store.add_file(FIXTURES / "documents" / "report.pdf")
+    accurate, _ = store.add_file(
+        FIXTURES / "documents" / "memo.pdf", params={"vision_tables": True}
+    )
+    documents = FakeDocuments()
+    worker(store, documents=documents).run(log=lambda _: None)
+    assert documents.table_modes == [False, True]  # the config default, then the upload's choice
+    assert store.source(plain.id).info["accurate_tables"] is False
+    assert store.source(accurate.id).info["accurate_tables"] is True
 
 
 def test_a_failing_job_is_recorded_and_the_worker_moves_on(store: Store) -> None:

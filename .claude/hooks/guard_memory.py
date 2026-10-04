@@ -11,13 +11,26 @@ from pathlib import Path
 
 from _hooklib import block, python_module, read_input, run, split_commands, tool_input
 
-MODEL_CLI_COMMANDS = {"ingest", "eval", "verify", "bench", "transcribe", "convert", "extract"}
+# ask / meeting start a temporary LLM server when none is running; ui loads the search models and starts Phase B.
+MODEL_CLI_COMMANDS = {
+    "ingest",
+    "eval",
+    "verify",
+    "bench",
+    "transcribe",
+    "convert",
+    "extract",
+    "ask",
+    "meeting",
+    "ui",
+}
 MODEL_CLI_MODEL_ACTIONS = {"smoke", "convert"}
 MLX_PREFIXES = ("mlx_lm", "mlx_vlm", "mlx_audio")
 # Extended regex for `pgrep -f`: processes that hold a phase's models in memory.
 RUNNING_PHASE_PATTERN = (
     r"mlx_lm[. ]server|granit\.ingest\.worker|granit\.verify\.worker|granit\.models\.smoke|granit\.bench\.workers|granit\.models\.mlx_server"
-    r"|granit (ingest|eval|verify|bench|transcribe|convert|extract)|granit models (smoke|convert)"
+    r"|granit (ingest|eval|verify|bench|transcribe|convert|extract|ask|meeting|ui)|granit models (smoke|convert)"
+    r"|streamlit run .*app/Home\.py"
 )
 
 
@@ -36,6 +49,10 @@ def loads_models(argv: list[str]) -> bool:
         if rest[:1] and rest[0] in MODEL_CLI_COMMANDS:
             return True
         return rest[:1] == ["models"] and rest[1:2] != [] and rest[1] in MODEL_CLI_MODEL_ACTIONS
+    if any(a.endswith("ui_screenshots.py") for a in argv):
+        return True  # starts the app (§4.8 layout check)
+    if (cmd == "streamlit" or module == "streamlit") and args[:1] == ["run"]:
+        return True  # the granit app (or any Streamlit script that might import it)
     if module and (
         module.split(".")[0] in MLX_PREFIXES
         or module.startswith(("granit.models.smoke", "granit.models.mlx_server", "granit.bench"))

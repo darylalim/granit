@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v24 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v25 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v24: M0–M5 done (reasoning + phase switching); 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v25: M0–M6 done (Streamlit UI); 16K context cap decided.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -82,6 +82,14 @@ run instead of being replayed; Phase A peaked at 12.8 GB with the MLX cache cap;
 confirmed as the default** (off rambled to the token limit, on never answered); `mlx_lm.server` has no structured output, so JSON
 comes from strict instructions + schema validation + one repair turn; `qa_turns` records every answer with its retrieval trace;
 measured switch: stop 0.09 s, Q&A back and warm in 7.3 s.
+
+**Changes in v25 (M6):** the Streamlit app built (`uv run granit ui`): Ingest, Library, Ask, Extract (§2.2, §4.8). **Top navigation
+instead of a sidebar:** the screenshot check found the sidebar's ~280 px pushed the Ask sources and the Extract fields *below* at
+1512 px; without it they sit beside as planned. A shared `Backend` (one per server process) owns the phase manager and runs
+`tick()` / "Process now" on its own thread. Pages open a SQLite connection per run (a connection belongs to its thread). Deep links
+`?source=ID`, per-upload "Accurate tables", re-ingest from the Library, and an AST check that every Markdown call in `app/` escapes
+what it renders (it found 14 unescaped calls on its first run). Measured in Chrome with the real models: Q&A ready 13 s after the
+first visit; an upload with accurate tables → Q&A paused → back in 27 s; answers ~97 characters per line at every width.
 ---
 
 ## 1. Scope (v1)
@@ -142,7 +150,7 @@ live (immediate) answer verification. **v1.1:** batch verification of answers an
 - **Memory is freed by ending processes.** Stopping a process reliably returns all of its memory, which makes
   phase switching safer than unloading models inside a long-running process.
 - **As built in M5 (`models/phases.py`):** each answer holds a `chat()` lease; no switch starts while one is open, and questions
-  during a switch get `PhaseBusy` with the banner text ("Q&A paused: ingesting 2 files"). `tick()` (called by the UI) switches when
+  during a switch get `PhaseBusy` with the banner text ("Q&A paused: ingesting 2 files"). `tick()` (the UI backend's thread calls it every 2 s) switches when
   jobs are queued and Q&A has been idle for **60 s**; **"Process now"** switches as soon as the answer in progress finishes. The
   worker runs as its own process (`python -m granit.ingest.worker`) and drains the whole queue; Q&A is **always** restarted,
   health-checked and warmed up afterwards, even when the batch fails. The manager refuses to start a second LLM server if one is
@@ -175,6 +183,13 @@ use. The UI only calls `granit` library functions, sends HTTP requests and queue
 
 **One exception: the query embedder and reranker.** Together about 0.6 GB, each call well under a second, so they run in the
 Q&A backend (loaded once with `st.cache_resource`, used behind a lock) rather than as another server.
+
+**As built in M6 (`src/granit/ui/`):** `Backend` is created once per Streamlit server (`st.cache_resource`) and shared by every
+browser tab. Its thread waits for any granit ingest process left running, loads Embedding R2 + Reranker R2, starts Q&A, then
+calls `tick()` every 2 s or `process_now()` when "Process now" is pressed. Answers and summaries run under a chat lease and one
+lock (MPS models, and writes on the backend's shared connection). It stops the LLM server when the cache entry is released and
+at exit (verified: no server left after the app stops). Pages never touch models or processes: they call `ask`, `summarize`,
+`request_processing`, `status`. A question asked while Q&A is paused is kept and asked when Q&A is back.
 M0 checks that PyTorch on MPS behaves under Streamlit's threads. If it doesn't, it moves into a small sidecar process.
 
 ### 2.3 Data storage
@@ -564,9 +579,9 @@ Fixtures: `scripts/make_document_fixtures.py` (Pillow + macOS Helvetica; the mem
 |---|---|
 | **uv** | Project + lockfile (`uv.lock`), Python 3.12 pinned in `.python-version`, `uv run …` everywhere |
 | **ruff** | Lint + format (`ruff check`, `ruff format`); config in `pyproject.toml`. `*.md` is excluded: ruff 0.16 also formats Python code blocks inside Markdown and rewrote this plan's snippets in M0 |
-| **ty** | Type checking (`ty check src tests`) |
+| **ty** | Type checking (`ty check src tests app`) |
 | **pytest** | Tests; markers split fast unit tests from model-backed tests |
-| **Streamlit** | UI (`uv run streamlit run app/Home.py`) |
+| **Streamlit** | UI (`uv run granit ui`, which runs `streamlit run app/Home.py` from the project root) |
 
 ### 4.1 Claude Code hooks
 
@@ -630,7 +645,7 @@ and the license guard). Model golden tests need GBs of weights and real Apple GP
 | Job | Runner | Steps | Why this runner |
 |---|---|---|---|
 | `lint` | `ubuntu-latest` | `uv lock --check` (lockfile matches `pyproject.toml`) · ruff format check · ruff check, using the **locked** ruff from a small `lint` dependency group | Seconds, needs no ML deps, cheapest runner |
-| `test` | **`macos-26`** (Apple Silicon, matches the dev Mac's macOS 26) | `uv sync --locked` · `ty check src tests` · `pytest -m "not model"` | The lock includes macOS-only MLX packages; ty needs them installed to resolve imports |
+| `test` | **`macos-26`** (Apple Silicon, matches the dev Mac's macOS 26) | `uv sync --locked` · `ty check src tests app` · `pytest -m "not model"` | The lock includes macOS-only MLX packages; ty needs them installed to resolve imports |
 | `release` | `ubuntu-latest` | Only on push to `main`, after `lint` + `test`: if tag `v<version>` doesn't exist → `uv build` → GitHub Release. See §4.3 | Pure-Python wheel; no ML deps needed to build |
 
 ```yaml
@@ -668,7 +683,7 @@ jobs:
         with:
           enable-cache: true   # caches uv's download cache keyed on uv.lock (torch, mlx, ...)
       - run: uv sync --locked
-      - run: uv run ty check src tests
+      - run: uv run ty check src tests app
       - run: uv run pytest -q -m "not model"          # includes the dependency-license guard (§4.4)
       - run: uv run python scripts/third_party_notices.py > THIRD_PARTY_NOTICES.md
       - uses: actions/upload-artifact@v7
@@ -1035,6 +1050,8 @@ gatherUsageStats = false          # fully local app: no Streamlit telemetry
 
 [server]
 address = "localhost"             # never listen on the network
+showEmailPrompt = false           # no first-run prompt (it would block `granit ui` without a terminal)
+maxUploadSize = 2048              # MB: an hour of 44.1 kHz stereo WAV is ~600 MB (Streamlit's default is 200)
 
 [client]
 toolbarMode = "viewer"            # hide developer options (Deploy, rerun); keep Settings (light/dark switch)
@@ -1180,8 +1197,8 @@ borderColor = "#292524"
 side by side when there's room and wrap to the next line otherwise. The panel widths decide where that switch happens. This gives a real
 breakpoint without JavaScript or screen-size detection.
 
-**Per-page patterns** (all pages use `st.set_page_config(layout="wide", initial_sidebar_state="auto")`, so the sidebar and header
-stay in the same place and each page limits its own content):
+**Per-page patterns** (all pages use `st.set_page_config(layout="wide")` and **top navigation**, so the header stays in the same
+place and each page limits its own content):
 
 | Page | Pattern | Tested behavior |
 |---|---|---|
@@ -1189,10 +1206,10 @@ stay in the same place and each page limits its own content):
 | **Extract** | Wrapping row, centered: **520 px** document image │ **520 px** extracted fields | **Side by side from 1512 px** (14" MacBook Pro) up; stacked and centered below that |
 | **Library** | Tables `width="stretch"`, fixed `height` with scrolling | Uses the full width: more columns visible on big monitors |
 | **Ingest** | 720 px column: upload area + job queue | Same reading width as Ask |
-| **All** | `initial_sidebar_state="auto"` | The sidebar collapses at ~760 px, giving the content full width |
+| **All** | `st.navigation(..., position="top")`, no sidebar | **Changed in M6:** with navigation in a sidebar, its ~280 px pushed the Ask sources and Extract fields below at 1512 px. At 760 px the top navigation collapses into a menu |
 
 ```python
-# app/layout.py: the shared helpers every page uses
+# src/granit/ui/layout.py: the shared helpers every page uses (each container gets a key → CSS class st-key-<key>)
 READING_WIDTH = 720      # ~96 chars/line at 15 px Source Sans
 SIDE_PANEL_WIDTH = 380   # Ask: sources beside the answer from ~1470 px
 EXTRACT_PANEL_WIDTH = 520  # Extract: side by side from ~1512 px
@@ -1214,14 +1231,21 @@ def safe_md(text: str) -> str:
 - **⚠️ All model output goes through `safe_md()` before `st.markdown`.** Found in the screenshots: two dollar amounts in one paragraph
   (`$4,980 … $1,200`) rendered the text between them as **LaTeX** (`code.language-math` in the page). The bundled docs only cover a single `$5`.
   Escaped output renders correctly (verified). `tests/unit/test_layout.py` checks that `safe_md` escapes every `$`, and that the
-  Ask / Library / Extract rendering code calls `safe_md` (grep-style check) so new code can't skip it.
-- **Width constants live in one place** (`app/layout.py`). Changing them moves the switch points, so the M6 screenshot check runs again.
+  Ask / Library / Extract rendering code calls `safe_md` (grep-style check) so new code can't skip it. **As built:** an AST check of
+  every page: each call that renders Markdown (`markdown`, `caption`, `info`, `error`, `badge`, `subheader`, …) may only interpolate
+  escaped values (`safe_md`, `answer_md`, `document_md`, `transcript_md`) or numbers (`{n:d}`). Its first run found 14 unescaped
+  calls (file names, error messages, model names). Document Markdown needs it too: the invoice's table has `$620.00 … $3,720.00`.
+- **Width constants live in one place** (`src/granit/ui/layout.py`). Changing them moves the switch points, so the M6 screenshot check runs again.
 - **Display scaling caveat:** switch points are CSS pixels; browser zoom and macOS "Larger Text / More Space" change the effective width,
   so switch points move a little but the behavior stays the same.
 
 **M6 layout check:** `scripts/ui_screenshots.py` (Playwright + installed Chrome, dev-only dependency) captures every page at
 **760, 1512 and 2560 px** in **light and dark** mode (24 screenshots) and reports panel positions (beside or below) and characters per line.
 It's a manual pre-merge check for UI changes, not part of CI (it needs a running app).
+`uv run --group screenshots python scripts/ui_screenshots.py --data DIR [--source ID] [--form ID]` (Playwright is in its own
+dependency group, so CI doesn't install it). **M6 result (2026-10-04):** 24 screenshots, 0 problems: no LaTeX, no sideways scroll,
+the chat input aligned with the conversation at every width; Ask sources and Extract fields **beside** at 1512 and 2560 px,
+**below** at 760 px; answers **~97 characters per line** at 15 px (wrapped prose measured in a chat message) at every width.
 
 ### 4.9 Evaluation design
 
@@ -1387,8 +1411,8 @@ granit/
 │   ├── verify/worker.py      # Phase C process (v1.1): judge unverified turns, write verdicts, exit
 │   ├── evaluate/             # M7 harness: retrieval setups × questions → recall@k + Guardian scores
 │   └── cli.py                # `granit ingest|ask|meeting|extract|eval` (+ `verify` in v1.1)
-├── app/Home.py + app/pages/  # Streamlit: Ingest, Library, Ask, Extract
-├── app/layout.py             # width constants, wrapping-row helpers, safe_md() (§4.8)
+├── app/Home.py + app/app_pages/  # Streamlit: Ingest, Library, Ask, Extract (page scripts only)
+├── src/granit/ui/            # layout.py (widths, safe_md), views.py (page data), backend.py (phases + Q&A), session.py
 ├── scripts/ui_screenshots.py # M6 check: every page × 3 widths × light/dark (§4.8)
 ├── scripts/make_audio_fixtures.py  # test audio via macOS `say` + `afconvert` (§3.5)
 ├── scripts/make_eval_fixtures.py   # public eval set: invoice PDFs (Playwright) + scripted meetings (`say`) + questions (§4.9)
@@ -1501,7 +1525,8 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Storage | **SQLite** (WAL, one transaction per job, versioned schema) + FTS5 over normalized `search_text` (IDs kept whole, words split from punctuation) + trigram ID index + float16 vectors on MPS (sqlite-vec later); files on disk by sha256. Postgres + pgvector only if multi-user |
 | Verification | **Granite Guardian 4.1 8B (local MLX q8)**: M7 evaluation in v1; batch verify job (Phase C) in v1.1; never loaded with the Q&A LLM; no-think; `yes_means` per criterion |
 | UI | Streamlit, 4 pages: Ingest, Library, Ask, Extract, plus a phase status banner (verdict badges in v1.1) |
-| Layout | **Wide pages, width-capped content (§4.8):** Ask 720 px column + 380 px sources panel that wraps beside it from ~1470 px; Extract 2 × 520 px panels side by side from ~1512 px; Library tables stretch; sidebar collapses automatically; `safe_md()` for all model output |
+| Layout | **Wide pages, width-capped content (§4.8):** Ask 720 px column + 380 px sources panel that wraps beside it from ~1470 px; Extract 2 × 520 px panels side by side from ~1512 px; Library tables stretch; top navigation, no sidebar; `safe_md()` for all model output |
+| Navigation | **Top navigation, no sidebar** (decided 2026-10-04, M6). With the page links in a sidebar, its ~280 px pushed the Ask sources and the Extract fields *below* at 1512 px (found by the §4.8 screenshot check); without it they sit beside as planned (~97 characters per line at every width). Four pages fit across the top and fold into a menu at 760 px; Streamlit recommends top navigation for 3–7 pages; the sidebar would hold nothing else (the phase banner is at the top of each page). Rejected: narrower panels (answers ~86 characters per line, a smaller invoice image, and still borderline on a 13" MacBook Air at 1470 px); a sidebar collapsed by default (page links hidden behind a toggle). Revisit only if app-wide controls (e.g. global filters) need a home |
 | Theme | **"Granite"**: stone neutrals + indigo accent (light `#4F46E5` / dark `#6059F1`, same hue), status colors reserved for status, matching light/dark modes, bundled fonts, WCAG AA verified; telemetry off, localhost only |
 | Toolchain | uv, ruff, ty, pytest |
 | CI | GitHub Actions: `lint` (ubuntu: `uv lock --check`, ruff) → `test` (macos-26 arm64: `uv sync --locked`, ty, `pytest -m "not model"`) → `release` (main only); no models in CI; model tests on the M2 Max |
@@ -1509,4 +1534,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Claude Code hooks | H1 format/lint after edits · H2 protected paths · H3 command guards (uv only, no `turboctc-nc`, no GPU-limit tuning) · H4 one phase at a time · H5 quality gate on Stop · H6 session context; shared via `.claude/settings.json` |
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
-| Next step | M6 Streamlit UI (Ingest with "Process now" + per-upload "Accurate tables", Library, Ask with streaming + citations + phase banner, Extract) on the M5 phase manager |
+| Next step | M7 evaluation: public eval set + harness (retrieval setups, answer checks incl. reasoning narration, extraction field match, table cell F1 Docling vs Vision, WER) |

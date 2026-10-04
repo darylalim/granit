@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from granit.config import INGEST_MLX_CACHE_LIMIT_GB
+from granit.config import DOCUMENT_VISION_TABLES, INGEST_MLX_CACHE_LIMIT_GB
 from granit.store.chunking import chunk_document, chunk_transcript
 from granit.store.db import Job, NewChunk, NewExtraction, Store
 
@@ -133,7 +133,8 @@ class IngestWorker:
         else:
             from docling_core.types.doc import DoclingDocument
 
-            result = self.documents.ingest(path, out)
+            accurate = bool(job.params.get("vision_tables", DOCUMENT_VISION_TABLES))
+            result = self.documents.ingest(path, out, vision_tables=accurate)
             chunks = chunk_document(DoclingDocument.model_validate(result.document))
             extractions = [
                 NewExtraction(
@@ -148,7 +149,7 @@ class IngestWorker:
                 )
                 for e in result.extractions
             ]
-            info = result.summary()
+            info = {**result.summary(), "accurate_tables": accurate}
         vectors = self.embedder.encode([c.search_body for c in chunks])
         info["chunks"] = len(chunks)
         self.store.complete_ingest(job, chunks, vectors, self.embedder.revision, extractions, info)

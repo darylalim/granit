@@ -10,7 +10,7 @@ uv sync                                   # install (uv-managed Python 3.12; nev
 uv run pytest                             # unit tests only (default: -m "not model"), seconds
 uv run pytest -m model                    # model smoke/golden tests on the Mac (loads GBs; one phase at a time)
 uv run ruff format && uv run ruff check   # format + lint
-uv run ty check src tests                 # types
+uv run ty check src tests app             # types
 uv run granit models list|download|convert|smoke
 uv run granit transcribe FILE… [--json DIR]  # audio → timestamped segments (M2)
 uv run granit convert FILE… [--out DIR] [--vision-tables]  # PDF/image → Markdown + chart data (M3)
@@ -20,10 +20,12 @@ uv run granit search "question" [--mode bm25|vectors|hybrid|hybrid+rerank] [--js
 uv run granit sources  # the library
 uv run granit ask "question" [--thinking off|low|on]  # cited answer (M5; starts Q&A if needed)
 uv run granit meeting SOURCE  # meeting summary JSON (M5)
+uv run granit ui [--data DIR]  # the app: Ingest, Library, Ask, Extract (M6)
+uv run --group screenshots python scripts/ui_screenshots.py --data DIR  # §4.8 layout check (24 screenshots)
 uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
 
-Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruff check`, `ty check src tests`, `pytest -m "not model"`.
+Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruff check`, `ty check src tests app`, `pytest -m "not model"`.
 
 ## Rules
 
@@ -33,6 +35,7 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **Lazy imports:** `mlx*`, `torch`, `sentence_transformers`, `transformers`, `docling` are imported inside functions only (`test_lazy_imports.py`). Unit tests use fakes; no weights or GPU in CI (`HF_HUB_OFFLINE=1`).
 - **One phase at a time** (PLAN.md §2.1): ingest (A), Q&A (B) or verify (C). Never load models while `mlx_lm.server` or a worker runs (hook H4). Memory is freed by ending processes.
 - **Phase B memory limits:** start the LLM server via `granit.models.server.ServerConfig` (2 GB prompt-cache cap + 1 GB MLX cache limit, PLAN.md §3.3); mlx-lm's defaults exceed the GPU limit at long contexts.
+- **UI:** page scripts in `app/app_pages/` stay thin; logic goes in `src/granit/ui/` (tested). Every Markdown-rendering call escapes what it interpolates (`safe_md`; `test_layout.py` checks). Pages open a store per run (`open_store()`); never share a connection across reruns.
 - **Phases:** the UI talks to the LLM only through `PhaseManager` (`models/phases.py`): wrap each answer in `phases.chat()`, call `tick()` periodically, `process_now()` for the button. Never start `mlx_lm.server` or the worker directly from UI code.
 - **No models in the Streamlit process**, except the query embedder + reranker behind a lock (PLAN.md §2.2).
 - **Never touch** `data/` (user data) or `models/` (weights). Both are gitignored and protected by hook H2.

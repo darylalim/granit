@@ -208,6 +208,12 @@ def test_protect_paths_end_to_end(project: Path) -> None:
         "python -m granit.bench.workers phase-a --hold",
         "python -m mlx_lm server --model x",
         "python -m granit.models.mlx_server --mlx-cache-limit-gb 1 --model x",
+        'uv run granit ask "who sends the draft?"',
+        "uv run granit meeting meeting.flac",
+        "uv run granit ui --data /tmp/lib",
+        "uv run streamlit run app/Home.py",
+        "python -m streamlit run app/Home.py --server.port 8599",
+        "uv run --group screenshots python scripts/ui_screenshots.py --data lib",
     ],
 )
 def test_guard_memory_detects_model_loading(command: str) -> None:
@@ -224,6 +230,8 @@ def test_guard_memory_detects_model_loading(command: str) -> None:
         "uv run ruff check",
         "pkill -f mlx_lm.server",
         "grep mlx_lm src -r",
+        "uv run streamlit config show",
+        "uv run granit sources",
     ],
 )
 def test_guard_memory_ignores_other_commands(command: str) -> None:

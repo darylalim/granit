@@ -32,7 +32,7 @@ jobs:
         with:
           enable-cache: true   # caches uv's download cache keyed on uv.lock (torch, mlx, ...)
       - run: uv sync --locked
-      - run: uv run ty check src tests
+      - run: uv run ty check src tests app
       - run: uv run pytest -q -m "not model"          # includes the dependency-license guard (§4.4)
       - run: uv run python scripts/third_party_notices.py > THIRD_PARTY_NOTICES.md
       - uses: actions/upload-artifact@v7

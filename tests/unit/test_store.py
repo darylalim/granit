@@ -16,6 +16,7 @@ from tests.conftest import ROOT
 FIXTURES = ROOT / "tests" / "fixtures"
 AUDIO = FIXTURES / "audio" / "vad_pauses.wav"
 DOC = FIXTURES / "documents" / "invoice.png"
+DOCS = FIXTURES / "documents"
 
 
 @pytest.fixture
@@ -66,6 +67,50 @@ def test_add_file_stores_by_hash_and_queues_one_ingest(store: Store) -> None:
     again, created = store.add_file(AUDIO, name="renamed.wav")
     assert not created and again.id == source.id
     assert len(store.jobs()) == 1  # duplicates aren't re-queued
+
+
+def test_ingest_params_and_reingest(store: Store) -> None:
+    source, _ = store.add_file(DOCS / "memo.pdf", params={"vision_tables": True})
+    (job,) = store.jobs()
+    assert job.params == {"vision_tables": True}
+    # Asking again while that ingest is still queued doesn't add a second one.
+    assert store.queue_ingest(source, {"vision_tables": False}).id == job.id
+    claimed = store.claim_next()
+    assert claimed is not None
+    store.complete_ingest(claimed, [], np.zeros((0, 768), np.float16), "rev")
+    again = store.queue_ingest(source, {"vision_tables": True})
+    assert (
+        again.id != job.id and again.params == {"vision_tables": True} and again.status == "queued"
+    )
+    assert (
+        store.source(source.id).status == "ready"
+    )  # still searchable until the new chunks replace the old ones
+
+
+def test_job_rows_put_open_jobs_first(store: Store) -> None:
+    first, _ = store.add_file(DOCS / "memo.pdf")
+    store.add_file(DOCS / "invoice.png")
+    job = store.claim_next()
+    assert job is not None and job.source_id == first.id
+    store.complete_ingest(job, [], np.zeros((0, 768), np.float16), "rev")
+    store.queue_ingest(store.source(first.id))
+    rows = store.job_rows()
+    assert [(r["source_name"], r["status"]) for r in rows] == [
+        ("memo.pdf", "queued"),
+        ("invoice.png", "queued"),
+        ("memo.pdf", "done"),
+    ]
+
+
+def test_a_shared_store_works_across_threads(tmp_path: Path) -> None:
+    import threading
+
+    shared = Store(tmp_path / "data", shared=True)
+    counts: list[int] = []
+    thread = threading.Thread(target=lambda: counts.append(shared.queued_count()))
+    thread.start()
+    thread.join()
+    assert counts == [0]
 
 
 def test_unknown_file_types_are_rejected(store: Store, tmp_path: Path) -> None:

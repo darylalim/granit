@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v18 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v19 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,8 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **approved plan (v18), not started**. Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03.
+Status: **v19: M0 done (released `v0.1.0.dev0`), M1 benchmarks done.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
 **Changes from v1:** removed "deep" mode (30B q4) and the 3B draft model. Granite Vision now runs on
@@ -54,6 +55,12 @@ set** (committed) and a **private eval set** (your data, in `data/`); labeled re
 summaries and ASR; **1.0 pass criteria**; result history; a Guardian agreement check; per-stage retrieval logging; golden-test fixes.
 Arize Phoenix considered and rejected.
 
+**Changes in v19 (M0 + M1 results):** M0 found and fixed: `setup-uv` has no floating `@v10` tag (pinned to a SHA, §4.2); ruff
+excludes `*.md` (§4); three permissive licenses added to the allow-list plus one reviewed override (§4.4). **M1 measured everything**
+(§3.3): the GPU limit is **26.8 GB**, not ~21; Phase B needs a **2 GB prompt-cache cap and a 1 GB MLX cache limit** (it reached
+28.8 GB with mlx-lm defaults); **prefill (215–345 tok/s) dominates time to first token** (~10 s for a RAG answer, new risk in §6);
+the vector matrix moves to **fp16 on MPS** (NumPy fp16 is 180× slower, §2.3); phase switches take 6.5–9 s (§2.1); the server needs a
+warm-up request after `/health`.
 ---
 
 ## 1. Scope (v1)
@@ -244,7 +251,7 @@ in one transaction per batch, exit, and restart Q&A. Verdicts appear as badges i
 | VAD | **`mlx-community/silero-vad-v6`** (MIT) | `mlx_audio.vad` (mlx-audio 0.5.7) | 1.2 MB | A | Splits audio at pauses. **Not** `mlx-community/silero-vad` (no license metadata). See §3.5. |
 | Docling | `ibm-granite/granite-docling-258M-mlx` | docling[vlm] → mlx-vlm | 0.63 GB | A | Official MLX build. |
 | Vision | `ibm-granite/granite-vision-4.1-4b` (**official bf16**) | mlx-vlm 0.7.4 | 8.0 GB | A | No conversion, no third-party weights. See §3.1. |
-| LLM | **`ibm-granite/granite-4.2-8b-q8-mlx`** | mlx-lm 0.32.0 server | 9.34 GB | B | 32K context; ~30–40 tok/s estimated on M2 Max. |
+| LLM | **`ibm-granite/granite-4.2-8b-q8-mlx`** | mlx-lm 0.32.0 server | 9.34 GB | B | 32K context; **36 tok/s** decode (16 at 30K), prefill 215–345 tok/s (M1, §3.3). |
 | Embedding | `ibm-granite/granite-embedding-english-r2` | sentence-transformers 6.1.0 (torch, `mps`) | 0.30 GB | A + B | Chunks in A, queries in B. See §3.2. |
 | Reranker | `ibm-granite/granite-embedding-reranker-english-r2` | sentence-transformers `CrossEncoder` (torch, `mps`, **fp16**) | 0.30 GB (0.60 GB fp32 on disk) | B | See §3.2. |
 | Judge | `ibm-granite/granite-guardian-4.1-8b` → **8-bit MLX built locally** (`mlx_lm.convert -q --q-bits 8`) | mlx-lm 0.32.0 (Python API) | ~8.9 GB (est.; 16.8 GB bf16 source) | M7 / C | No official MLX build; IBM's GGUF Q8_0 (8.91 GB) is the fallback. See §2.4. |
@@ -301,14 +308,48 @@ What I checked:
 
 ### 3.3 Memory budget
 
-| Phase | Loaded | Weights | Cache / activations | Peak |
-|---|---|---|---|---|
-| A: Ingest | Speech + VAD + Docling + Vision bf16 + Embedding | 9.9 GB | ~1–2 GB (Vision: up to ~1.6K image tokens) | **~12 GB** |
-| B: Q&A | 8B q8 + Embedding (queries) + Reranker fp16 | 9.94 GB | 32K ctx × 160 KB = 5.2 GB | **~15.8 GB** |
-| C: Verify (v1.1) / M7 eval | Guardian 4.1 8B q8 | ~8.9 GB | 8K ctx × 160 KB = 1.3 GB (chunks + answer + guardian block) | **~10.5 GB** |
+**Measured in M1 (2026-10-04, `granit bench`; results in `bench/results/`).** Memory is each process's **physical footprint**
+(what Activity Monitor shows; it includes Metal buffers, which RSS misses). The GPU limit is Metal's recommended working set:
+**26.8 GB** on this M2 Max with macOS 26 and no tuning (`iogpu.wired_limit_mb = 0`). The plan's earlier "~21 GB" figure was out of date.
 
-All phases stay well under the ~21 GB macOS lets the GPU use by default on a 32 GB Mac, with no system tuning
-and room left over for macOS, the browser and Streamlit.
+| Phase | Loaded | Plan estimate | **Measured peak** | What drives it |
+|---|---|---|---|---|
+| A: Ingest | Speech + VAD + Docling + Vision bf16 + Embedding | ~12 GB | **15.6 GB** (11.7 GB after loading) | MLX keeps freed buffers cached between stages (Docling, Vision); the worker should set an MLX cache limit (M2/M3) |
+| B: Q&A, RAG prompts (~3K tokens) | 8B q8 server + embedder + reranker + 150K-vector matrix | ~15.8 GB | **~15.3 GB** (server ~12.5 + retrieval 2.8) | Weights 9.3 GB; the prompt cache is capped at 2 GB |
+| B: Q&A, 30K-token prompt | same | ~15.8 GB | **23.5 GB** (server 20.7 + retrieval 2.8) | 30K × 160 KB of KV = 4.8 GB, plus prefill buffers |
+| C: Verify / M7 eval | Guardian 4.1 8B q8 | ~10.5 GB | **12.4 GB** (8.2K-token check) | Weights 8.9 GB + KV + buffers |
+
+**Phase B needs two limits** (defaults in `config.py`, applied by `ServerConfig` / `granit.models.mlx_server`). With mlx-lm's defaults it reached
+**28.8 GB, over the GPU limit**:
+- **`--prompt-cache-bytes 2GB`:** mlx-lm keeps up to 10 prompt KV caches with **no byte limit**. Over 10 distinct RAG prompts the server grew
+  10.8 → 16.2 GB with the default, and stayed at ~12.5 GB with the cap.
+- **MLX cache limit 1 GB:** MLX caches the old buffers each time the KV cache grows. One 30K request on a fresh server peaked at 24.8 GB
+  with defaults and **20.9 GB** with both limits (in-process: 19.8 → 16.3 GB). Same speed either way.
+- `--prefill-step-size` (512 vs 2048) made **no** difference to the peak.
+
+**Headroom at 30K is the open question.** 23.5 GB fits the GPU limit, but leaves ~8 GB of the 32 GB for macOS, the browser and
+Streamlit. Untested options if that's too tight: 8-bit KV cache (`--kv-bits 8`, halves KV), or a lower context limit (16K: server 17.5 GB).
+Typical RAG use (~15 GB) is far from either limit.
+
+**Speed (M2 Max, measured):**
+
+| | Result |
+|---|---|
+| LLM decode | **35.9 tok/s** short context → 27 tok/s at 8K → 16 tok/s at 30K |
+| LLM prefill (compute-bound) | 344 tok/s at 1K → 303 at 8K → 215 at 30K. **TTFT: 2.9 s (1K), 12.5 s (4K), 26 s (8K), 61 s (16K), 137 s (29K)** |
+| Server start | `/health` in 3.7 s; weights load on the first request (warm-up 1.1–3.2 s) |
+| Query embedding | 13 ms p50 |
+| Rerank 30 pairs (~300 tokens each) | **555 ms** p50 |
+| Vector search, top-50 | 1.0 ms at 150K, 5.1 ms at 1M (fp16 on MPS; §2.3) |
+| Phase A load | 5.5 s (Speech 0.4, VAD 0.02, Docling 1.5, Vision 2.8, Embedding 0.8) |
+| Speech | real-time factor **0.009** (112 s of audio: VAD 0.56 s + TurboCTC 0.45 s) |
+| Docling | 2.4 s per page |
+| Vision bf16 | prefill ~660 tok/s, decode ~44 tok/s; `<chart2csv>` 3.0 s, `<tables_html>` (800 tokens) 20 s |
+| Chunk embedding (ingest) | 57 chunks/s (~300 tokens each) |
+| Guardian no-think check | **9.0 s** p50 for 3K tokens (8 chunks + answer); 26 s at 8.2K. All 10 scores parsed |
+| Phase switch | B→A 7.6–8.9 s · A→B 6.5–6.7 s (§2.1) |
+
+A RAG answer's time to first token is therefore about **embed 13 ms + rerank 0.55 s + prefill ~9 s ≈ 10 s**, dominated by prefill (§6).
 
 **The 32K context and long transcripts:** a one-hour meeting is about 12–14K tokens, so meetings up to about 2 hours fit in one
 pass. Longer ones are summarized in sections first, then combined. RAG answers use top-k chunks.
@@ -390,7 +431,7 @@ Static guidance (conventions, architecture) goes in `CLAUDE.md`; hooks handle wh
 | H1 | `PostToolUse` · `Edit\|Write` | `format_lint.py` | For edited `*.py`: `uv run ruff format <file>` then `uv run ruff check --fix <file>`. Remaining lint errors → **exit 2**, stderr shown to Claude so it fixes them right away | Feedback only (the edit already happened) |
 | H2 | `PreToolUse` · `Edit\|Write` | `protect_paths.py` | Denies edits to `data/**` (user data, `granit.db`), `models/**` (downloaded / converted weights), `uv.lock` (change via `uv add` / `uv lock` only), `.env*` | **Yes** (exit 2 + reason) |
 | H3 | `PreToolUse` · `Bash` | `guard_bash.py` | Denies: `pip install` / `python -m pip` (→ "use `uv add`"); `huggingface-cli` (deprecated → `hf`); anything referencing **`turboctc-nc`** (non-commercial license); `rm -rf` on `data/` or `models/`; `sudo sysctl iogpu…` (the plan needs no GPU-limit tuning); `git tag` / `git push --tags` / `gh release create` (releases come only from CI, §4.3) | **Yes** |
-| H4 | `PreToolUse` · `Bash` | `guard_memory.py` | If the command loads models (`pytest -m model`, `granit ingest\|eval\|verify`, `mlx_lm.*`, `mlx_vlm.*`) **and** an `mlx_lm.server` / granit worker process is already running → deny with "stop the running phase first": two phases at once would exceed ~21 GB | **Yes** |
+| H4 | `PreToolUse` · `Bash` | `guard_memory.py` | If the command loads models (`pytest -m model`, `granit ingest\|eval\|verify`, `mlx_lm.*`, `mlx_vlm.*`) **and** an `mlx_lm.server` / granit worker process is already running → deny with "stop the running phase first": two phases at once would exceed the 26.8 GB GPU limit | **Yes** |
 | H5 | `Stop` | `quality_gate.py` | If any `*.py` changed (`git diff --name-only` + untracked files): `ruff format --check`, `ruff check`, `ty check`, `pytest -q -m "not model"`. Failures → **exit 2** with a short summary, so Claude keeps working. If `stop_hook_active` is true → exit 0 (no loops) | **Yes** (keeps Claude working) |
 | H6 | `SessionStart` | `session_context.py` | Prints a few lines into Claude's context: branch + uncommitted files, current milestone (from `.claude/milestone`), which models are downloaded / converted, "plan: PLAN.md §7 Decisions" | No |
 
@@ -1235,15 +1276,17 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 
 | Risk | Mitigation |
 |---|---|
-| Phase switches feel slow if jobs trickle in one at a time | Batch queued jobs; "Process now" button; M1 measures switch time |
+| Phase switches feel slow if jobs trickle in one at a time | Batch queued jobs; "Process now" button. **M1: B→A 7.6–8.9 s, A→B 6.5–6.7 s** (§2.1) |
 | A crashed ingest job leaves Q&A down | Phase manager always restarts `mlx_lm.server` (`try/finally`); failed jobs marked and kept for retry |
 | The mlx-vlm Vision port could differ from the reference Transformers output (DeepStack injection) | Golden tests against the card's example outputs; compare one sample with Transformers on MPS if needed |
 | Tight transformers version window (≥ 5.16, Docling excludes some 5.x) | Commit `uv.lock`; upgrade deliberately |
 | MLX in Streamlit threads | Models only in the worker process / `mlx_lm.server` (by design) |
-| Thinking mode slows answers | `reasoning_effort: "low"` by default; a per-question toggle in the UI |
+| Thinking mode slows answers | `reasoning_effort: "low"` by default; a per-question toggle in the UI. M1: Granite 4.2 thinks unless `enable_thinking: false` |
+| **Long prompts are slow to start (M1)**: prefill is compute-bound at ~210–345 tok/s, so TTFT is ~10 s for a 3K-token RAG prompt and ~2.3 min at 30K | Keep RAG prompts small (top-8 chunks ≈ 3K tokens); stream answers; show "reading N chunks…" progress; reuse the prompt cache for follow-up questions on the same document; summarize long meetings in sections |
+| **Phase B memory grows past the GPU limit (M1)**: mlx-lm keeps up to 10 prompt KV caches with no byte limit, and MLX caches freed KV buffers; a 30K request reached 24.7 GB alone | `--prompt-cache-bytes 2GB` + MLX cache limit 1 GB via `granit.models.mlx_server` (defaults in `config.py`); `granit bench` re-checks the budget |
 | Model cards' "≥ 16 GB" claims are template text | Rely on M1 measurements |
 | ID / code searches miss with the default tokenizer | Code-friendly `tokenchars` + trigram index; unit tests for exact and partial IDs |
-| Vector matrix grows in Phase B memory | Measure in M1; switch to sqlite-vec at about 1M chunks |
+| Vector matrix grows in Phase B memory | fp16 on MPS: 230 MB at 150K chunks (M1); switch to sqlite-vec at about 1M chunks (1.5 GB) |
 | Unnormalized embeddings distort dot-product ranking | `normalize_embeddings=True` enforced in one wrapper; unit test checks vector length |
 | Guardian yes/no polarity misread (yes = risk vs yes = met) | `yes_means` per criterion; UI shows only derived `passed`; unit tests for both polarities |
 | Local Guardian q8 build judges differently from bf16 | Golden tests on the card's examples + compare q8 vs bf16 on a sample of M7 verdicts; fallback: IBM GGUF Q8_0 via llama.cpp |
@@ -1283,9 +1326,9 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | `.gitignore` | Project-specific (§4.5): ignore `data/`, `models/`, weight/db extensions, venv/caches/dist, secrets, OS/editor files; commit `uv.lock`, hooks, CI, license files, fixtures; guarded by `test_gitignore.py` |
 | License (granit) | **Open source, Apache-2.0**: `LICENSE` + `NOTICE`, `license = "Apache-2.0"` metadata, CI dependency-license guard (permissive + MPL-2.0 only), `THIRD_PARTY_NOTICES.md` on releases, miniaudio instead of ffmpeg |
 | LLM | Granite 4.2 8B q8 only; no 30B deep mode, no 3B draft |
-| Memory strategy | **Phase switching**: ingest (A: Speech + Docling + Vision bf16, ~12 GB), Q&A (B: 8B q8, 32K, ~15.8 GB) and verify (C, v1.1: Guardian q8, ~10.5 GB) take turns |
+| Memory strategy | **Phase switching**: ingest (A: Speech + Docling + Vision bf16, 15.6 GB measured), Q&A (B: 8B q8, 32K; ~15 GB for RAG, 23.5 GB at 30K with the 2 GB prompt-cache cap + 1 GB MLX cache limit) and verify (C, v1.1: Guardian q8, 12.4 GB) take turns, under the 26.8 GB GPU limit (§3.3) |
 | Audio | Decode: miniaudio (WAV/FLAC/MP3/Ogg) + macOS `afconvert` (M4A/AAC/AIFF/CAF), no ffmpeg; **Silero VAD v6 (MIT, via mlx-audio)** splits at pauses into ≤ 30 s chunks; TurboCTC per chunk; timestamped segments |
-| Search | **Hybrid + rerank**: SQLite FTS5 BM25 + Granite Embedding English R2 vectors → RRF → Granite Reranker English R2 → top-8 |
+| Search | **Hybrid + rerank**: SQLite FTS5 BM25 + Granite Embedding English R2 vectors (fp16 matrix on MPS, 1 ms at 150K) → RRF → Granite Reranker English R2 (555 ms for 30 pairs) → top-8 |
 | Storage | **SQLite** (WAL, one transaction per job) + FTS5 (code tokenizer) + trigram ID index + float16 vectors in NumPy (sqlite-vec later); files on disk by sha256. Postgres + pgvector only if multi-user |
 | Verification | **Granite Guardian 4.1 8B (local MLX q8)**: M7 evaluation in v1; batch verify job (Phase C) in v1.1; never loaded with the Q&A LLM; no-think; `yes_means` per criterion |
 | UI | Streamlit, 4 pages: Ingest, Library, Ask, Extract, plus a phase status banner (verdict badges in v1.1) |
@@ -1297,4 +1340,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Claude Code hooks | H1 format/lint after edits · H2 protected paths · H3 command guards (uv only, no `turboctc-nc`, no GPU-limit tuning) · H4 one phase at a time · H5 quality gate on Stop · H6 session context; shared via `.claude/settings.json` |
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
-| Next step | Plan only; implementation not started |
+| Next step | M2 audio ingest. Open question from M1: is 23.5 GB at 30K context enough headroom, or should we try 8-bit KV / a 16K limit (§3.3)? |

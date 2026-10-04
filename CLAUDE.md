@@ -12,6 +12,7 @@ uv run pytest -m model                    # model smoke/golden tests on the Mac 
 uv run ruff format && uv run ruff check   # format + lint
 uv run ty check src tests                 # types
 uv run granit models list|download|convert|smoke
+uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
 
 Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruff check`, `ty check src tests`, `pytest -m "not model"`.
@@ -23,6 +24,7 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **Pin models by commit SHA** in `config.py`. Load from the local snapshot (`granit.models.download.local_snapshot`), never by bare repo ID.
 - **Lazy imports:** `mlx*`, `torch`, `sentence_transformers`, `transformers`, `docling` are imported inside functions only (`test_lazy_imports.py`). Unit tests use fakes; no weights or GPU in CI (`HF_HUB_OFFLINE=1`).
 - **One phase at a time** (PLAN.md §2.1): ingest (A), Q&A (B) or verify (C). Never load models while `mlx_lm.server` or a worker runs (hook H4). Memory is freed by ending processes.
+- **Phase B memory limits:** start the LLM server via `granit.models.server.ServerConfig` (2 GB prompt-cache cap + 1 GB MLX cache limit, PLAN.md §3.3); mlx-lm's defaults exceed the GPU limit at long contexts.
 - **No models in the Streamlit process**, except the query embedder + reranker behind a lock (PLAN.md §2.2).
 - **Never touch** `data/` (user data) or `models/` (weights). Both are gitignored and protected by hook H2.
 - **Releases come only from CI** (PLAN.md §4.3): bump with `uv version --bump …`, merge a PR. No local tags or `gh release`.

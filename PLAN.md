@@ -1421,6 +1421,14 @@ question's answer** under this question (answer relevance should fail). They ser
 
 Planted errors are blunter than real ones, so the hand check (on real answers too) still decides whether Guardian counts.
 
+**Judge check result (2026-10-04, public set, `eval/public/judge_agreement.json`): passed. Guardian's groundedness now counts
+toward the pass criteria.** 50 verdicts labeled blind: **agreement 0.92** (≥ 0.85), **Cohen's κ 0.81**; real answers 0.92
+(κ 0.54, few real failures to agree on), controls 0.92 (κ 0, uninformative: Guardian failed every control). Of the 4 disagreements,
+2 came from the labeling tool, which cut sources at 300 characters and hid the evidence for two correct answers (a table's week 7,
+a transcript's later line), so the person said "not supported" and Guardian, seeing everything, passed them. The tool now shows
+sources whole, so the true agreement is at least 0.92. The other 2: a correct answer whose reasoning narration was judged
+unsupported, and a planted "12 %" (source: 9 %) labeled supported. Repeat after any Guardian or prompt change.
+
 #### Running and comparing
 
 - `granit eval run --set public|private [--retrieval bm25|vectors|hybrid|hybrid+rerank]` runs through the phase manager:

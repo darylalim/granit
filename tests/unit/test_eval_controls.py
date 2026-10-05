@@ -153,3 +153,29 @@ def test_the_labeling_sample_mixes_controls_in_blind(two_answers: Path, tmp_path
         result["controls"]["n"] == 2 and result["controls"]["agreement"] == 0.0
     )  # "y" on wrong answers disagrees
     assert result["real"]["n"] == 4 and result["real"]["agreement"] == 1.0
+
+
+def test_sources_are_shown_whole(tmp_path: Path) -> None:
+    """The 2026-10-04 check cut sources at 300 characters and hid the evidence for two correct answers."""
+    root = build_set(tmp_path / "set")
+    library = tmp_path / "library"
+    library.mkdir()
+    evidence = "Week 7: Boise handled 571 pallets."
+    long_source = ("Week 1: 501 pallets. " * 50) + evidence
+    run = {
+        "items": [
+            {
+                "id": "q1",
+                "question": "Boise, week 7?",
+                "answer": "571 [1].",
+                "documents": [long_source],
+            }
+        ],
+        "verdicts": [
+            {"id": "q1", "criterion": "groundedness", "score": "no", "passed": True, "raw": ""}
+        ],
+    }
+    (library / "verdicts-20261004-120000.json").write_text(json.dumps(run))
+    shown: list[str] = []
+    agreement(load_set(str(root)), library, ask=lambda _: "y", show=shown.append)
+    assert evidence in " ".join(" ".join(line.split()) for line in shown)

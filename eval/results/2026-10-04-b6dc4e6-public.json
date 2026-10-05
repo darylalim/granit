@@ -1,0 +1,1409 @@
+{
+  "set": "public",
+  "date": "2026-10-04",
+  "git_sha": "b6dc4e6",
+  "config": {
+    "retrieval": "hybrid+rerank",
+    "k": 8,
+    "thinking": "low",
+    "judge": true,
+    "models": {
+      "speech": "ibm-granite/granite-speech-5.0-470m-turboctc@947f59a",
+      "vad": "mlx-community/silero-vad-v6@2ebf4a5",
+      "docling": "ibm-granite/granite-docling-258M-mlx@e9939db",
+      "vision": "ibm-granite/granite-vision-4.1-4b@37d591f",
+      "llm": "ibm-granite/granite-4.2-8b-q8-mlx@a60999a",
+      "embedding": "ibm-granite/granite-embedding-english-r2@47ea694",
+      "reranker": "ibm-granite/granite-embedding-reranker-english-r2@d09d3d6",
+      "guardian-source": "ibm-granite/granite-guardian-4.1-8b@ab01ccc",
+      "guardian": "granite-guardian-4.1-8b-q8-mlx (built from guardian-source)"
+    }
+  },
+  "metrics": {
+    "retrieval": {
+      "bm25": {
+        "recall@8": 1.0,
+        "mrr@8": 0.9359
+      },
+      "vectors": {
+        "recall@8": 1.0,
+        "mrr@8": 0.919
+      },
+      "hybrid": {
+        "recall@8": 1.0,
+        "mrr@8": 0.9423
+      },
+      "hybrid+rerank": {
+        "recall@8": 1.0,
+        "mrr@8": 0.9295
+      }
+    },
+    "answers": {
+      "fact_coverage": 0.9615,
+      "citation_precision": 0.9615,
+      "unanswerable_declined": 1.0,
+      "false_declines": 0.0,
+      "by_category": {
+        "document": {
+          "fact_coverage": 1.0
+        },
+        "meeting": {
+          "fact_coverage": 0.8571
+        },
+        "cross-source": {
+          "fact_coverage": 1.0
+        }
+      }
+    },
+    "guardian": {
+      "controls": {
+        "made": 12,
+        "caught": 1.0,
+        "caught_number": 1.0,
+        "caught_swap": 1.0
+      },
+      "groundedness": 1.0,
+      "answer_relevance": 0.9615,
+      "errors": 0,
+      "judged": 26,
+      "agreement": null
+    },
+    "extraction": {
+      "field_accuracy": 0.9355,
+      "documents_all_correct": 0.7,
+      "invalid": 1,
+      "wrong_fields": {
+        "dn-01": [
+          "received_by"
+        ],
+        "exp-01": [
+          "approved_by"
+        ],
+        "inv-03": [
+          "due_date",
+          "invoice_date"
+        ]
+      }
+    },
+    "tables": {
+      "docling": {
+        "cell_f1": 0.7474,
+        "s_per_table": 1.2688
+      },
+      "vision": {
+        "cell_f1": 0.9253,
+        "s_per_table": 10.5762
+      },
+      "default": {
+        "cell_f1": 0.9974
+      },
+      "cell_f1": 0.9974,
+      "by_type": {
+        "borderless": {
+          "docling": 1.0,
+          "vision": 0.9231,
+          "default": 1.0
+        },
+        "control": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "dense numeric": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "line breaks in cells": {
+          "docling": 1.0,
+          "vision": 0.5,
+          "default": 1.0
+        },
+        "merged headers": {
+          "docling": 0.9796,
+          "vision": 0.9796,
+          "default": 0.9796
+        },
+        "skewed scan": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "split across pages": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        }
+      },
+      "rule": {
+        "default": "vision",
+        "vision_types": []
+      },
+      "per_table": {
+        "borderless": {
+          "docling": 1.0,
+          "vision": 0.9231,
+          "default": 1.0
+        },
+        "control-a": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "control-b": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "dense-numeric": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "line-breaks": {
+          "docling": 1.0,
+          "vision": 0.5,
+          "default": 1.0
+        },
+        "merged-headers": {
+          "docling": 0.9796,
+          "vision": 0.9796,
+          "default": 0.9796
+        },
+        "scan-skewed": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "split-pages": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        }
+      }
+    },
+    "summaries": {
+      "action_item_recall": 0.8333,
+      "action_item_precision": 0.8333,
+      "decision_recall": 0.6667
+    },
+    "asr": {
+      "wer": 0.0556,
+      "recordings": 3
+    },
+    "speed": {
+      "first_token_p50_s": 2.725,
+      "first_token_p90_s": 5.128,
+      "answer_p50_s": 4.073,
+      "answer_p90_s": 7.374
+    }
+  },
+  "criteria": [
+    {
+      "metric": "retrieval.hybrid+rerank.recall@8",
+      "value": 1.0,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": false
+    },
+    {
+      "metric": "answers.fact_coverage",
+      "value": 0.9615,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": false
+    },
+    {
+      "metric": "guardian.groundedness",
+      "value": 1.0,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": true
+    },
+    {
+      "metric": "answers.unanswerable_declined",
+      "value": 1.0,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": false
+    },
+    {
+      "metric": "extraction.field_accuracy",
+      "value": 0.9355,
+      "op": ">=",
+      "threshold": 0.98,
+      "pass": false,
+      "informational": false
+    },
+    {
+      "metric": "tables.cell_f1",
+      "value": 0.9974,
+      "op": ">=",
+      "threshold": 0.95,
+      "pass": true,
+      "informational": false
+    },
+    {
+      "metric": "summaries.action_item_recall",
+      "value": 0.8333,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": false,
+      "informational": false
+    },
+    {
+      "metric": "asr.wer",
+      "value": 0.0556,
+      "op": "<=",
+      "threshold": 0.05,
+      "pass": false,
+      "informational": false
+    }
+  ],
+  "passed": false,
+  "failed_files": [],
+  "timings": {
+    "phase_a_s": 219.6,
+    "phase_b_s": 201.9,
+    "phase_c_s": 180.1,
+    "total_s": 601.7
+  },
+  "questions": [
+    {
+      "id": "doc-01",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.031,
+        "first_token_s": 3.522,
+        "total_s": 5.344
+      },
+      "turn_id": 1,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-02",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.029,
+        "first_token_s": 2.269,
+        "total_s": 4.032
+      },
+      "turn_id": 2,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-03",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.025,
+        "first_token_s": 2.491,
+        "total_s": 4.073
+      },
+      "turn_id": 3,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-04",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.829,
+        "first_token_s": 2.725,
+        "total_s": 3.852
+      },
+      "turn_id": 4,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-05",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.019,
+        "first_token_s": 2.937,
+        "total_s": 4.522
+      },
+      "turn_id": 5,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-06",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.25,
+        "first_token_s": 2.254,
+        "total_s": 2.95
+      },
+      "turn_id": 6,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-07",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.021,
+        "first_token_s": 6.008,
+        "total_s": 7.623
+      },
+      "turn_id": 7,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-08",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 0.14285714285714285
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 0.16666666666666666
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.02,
+        "first_token_s": 2.263,
+        "total_s": 3.577
+      },
+      "turn_id": 8,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-09",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.824,
+        "first_token_s": 2.086,
+        "total_s": 3.234
+      },
+      "turn_id": 9,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-10",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.018,
+        "first_token_s": 1.987,
+        "total_s": 3.564
+      },
+      "turn_id": 10,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-11",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.225,
+        "first_token_s": 2.189,
+        "total_s": 2.865
+      },
+      "turn_id": 11,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-12",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.013,
+        "first_token_s": 2.325,
+        "total_s": 3.929
+      },
+      "turn_id": 12,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-13",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.024,
+        "first_token_s": 5.957,
+        "total_s": 7.729
+      },
+      "turn_id": 13,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-14",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.772,
+        "first_token_s": 3.109,
+        "total_s": 4.417
+      },
+      "turn_id": 14,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "doc-15",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.028,
+        "first_token_s": 7.34,
+        "total_s": 9.061
+      },
+      "turn_id": 15,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "mtg-01",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 0.5,
+      "facts_missing": 1,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.253,
+        "first_token_s": 2.869,
+        "total_s": 3.657
+      },
+      "turn_id": 16,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "mtg-02",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.241,
+        "first_token_s": 1.762,
+        "total_s": 2.919
+      },
+      "turn_id": 17,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "mtg-03",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 0.25
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.017,
+        "first_token_s": 2.976,
+        "total_s": 4.44
+      },
+      "turn_id": 18,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "mtg-04",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 0.5,
+      "facts_missing": 1,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.019,
+        "first_token_s": 4.96,
+        "total_s": 6.517
+      },
+      "turn_id": 19,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": false
+      }
+    },
+    {
+      "id": "mtg-05",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 0.3333333333333333
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.025,
+        "first_token_s": 5.128,
+        "total_s": 6.739
+      },
+      "turn_id": 20,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "mtg-06",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 0.5
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.349,
+        "first_token_s": 2.571,
+        "total_s": 3.716
+      },
+      "turn_id": 21,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "mtg-07",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 0.5
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 0.0,
+      "latency": {
+        "retrieval_s": 1.018,
+        "first_token_s": 1.839,
+        "total_s": 3.476
+      },
+      "turn_id": 22,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "x-01",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.267,
+        "first_token_s": 2.296,
+        "total_s": 3.541
+      },
+      "turn_id": 23,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "x-02",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.03,
+        "first_token_s": 2.052,
+        "total_s": 4.911
+      },
+      "turn_id": 24,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "x-03",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.017,
+        "first_token_s": 3.548,
+        "total_s": 5.045
+      },
+      "turn_id": 25,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "x-04",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.029,
+        "first_token_s": 4.42,
+        "total_s": 7.374
+      },
+      "turn_id": 26,
+      "guardian": {
+        "groundedness": true,
+        "answer_relevance": true
+      }
+    },
+    {
+      "id": "none-01",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 0.824,
+        "first_token_s": 3.913,
+        "total_s": 4.954
+      },
+      "turn_id": 27,
+      "guardian": {}
+    },
+    {
+      "id": "none-02",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 1.018,
+        "first_token_s": 4.588,
+        "total_s": 5.823
+      },
+      "turn_id": 28,
+      "guardian": {}
+    },
+    {
+      "id": "none-03",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 0.243,
+        "first_token_s": 1.413,
+        "total_s": 1.863
+      },
+      "turn_id": 29,
+      "guardian": {}
+    },
+    {
+      "id": "none-04",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 0.24,
+        "first_token_s": 1.538,
+        "total_s": 1.984
+      },
+      "turn_id": 30,
+      "guardian": {}
+    },
+    {
+      "id": "none-05",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 1.018,
+        "first_token_s": 4.679,
+        "total_s": 5.918
+      },
+      "turn_id": 31,
+      "guardian": {}
+    }
+  ]
+}

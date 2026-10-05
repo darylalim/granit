@@ -214,6 +214,17 @@ def test_results_are_written_and_compared(eval_root: Path, tmp_path: Path) -> No
     rows = {r["metric"]: r for r in report.compare(result, worse)}
     assert rows["answers.fact_coverage"]["regression"] and rows["asr.wer"]["regression"]
     assert not rows["retrieval.bm25.recall@8"]["regression"]
+    better = json.loads(path.read_text())
+    better["metrics"]["answers"]["false_declines"] = (
+        0.0  # fewer wrong declines is better, not a regression
+    )
+    better["metrics"]["guardian"]["judged"] = 99  # a count, not a quality metric
+    result["metrics"]["answers"]["false_declines"] = 0.08
+    rows = {r["metric"]: r for r in report.compare(result, better)}
+    assert (
+        not rows["answers.false_declines"]["regression"]
+        and not rows["guardian.judged"]["regression"]
+    )
     assert cli.main(["eval", "compare", str(path), str(path)]) == 0
 
 

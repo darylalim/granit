@@ -14,67 +14,14 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from granit.ingest.vision import html_grid as html_grid  # tables are scored on the grid ingest uses
+from granit.ingest.vision import html_grid as html_grid
+from granit.store.text import canonical as normalize  # tables are scored on the grid ingest uses
 
 # ── normalization ──
-
-MONTHS = {
-    m: i
-    for i, names in enumerate(
-        [
-            ("jan", "january"),
-            ("feb", "february"),
-            ("mar", "march"),
-            ("apr", "april"),
-            ("may",),
-            ("jun", "june"),
-            ("jul", "july"),
-            ("aug", "august"),
-            ("sep", "sept", "september"),
-            ("oct", "october"),
-            ("nov", "november"),
-            ("dec", "december"),
-        ],
-        start=1,
-    )
-    for m in names
-}
-MONTH = "|".join(sorted(MONTHS, key=len, reverse=True))
-DATE_MDY_NAME = re.compile(rf"\b({MONTH})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})\b")
-DATE_DMY_NAME = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({MONTH})\.?,?\s+(\d{{4}})\b")
-DATE_MDY_SLASH = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
-DATE_ISO = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
-DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−"), "-")
-QUOTES = {ord("‘"): "'", ord("’"): "'", ord("“"): '"', ord("”"): '"'}
-
-
-def _iso(year: str, month: int, day: str) -> str:
-    return f"{int(year):04d}-{month:02d}-{int(day):02d}"
-
-
-def normalize(text: str) -> str:
-    """Lowercase text with numbers, dates and punctuation in one canonical form, for substring and equality checks."""
-    t = unicodedata.normalize("NFKC", str(text)).translate(DASHES).translate(QUOTES).lower()
-    t = DATE_MDY_NAME.sub(lambda m: _iso(m[3], MONTHS[m[1]], m[2]), t)
-    t = DATE_DMY_NAME.sub(lambda m: _iso(m[3], MONTHS[m[2]], m[1]), t)
-    t = DATE_MDY_SLASH.sub(lambda m: _iso(m[3], int(m[1]), m[2]), t)
-    t = DATE_ISO.sub(lambda m: _iso(m[1], int(m[2]), m[3]), t)
-    t = re.sub(r"[$€£¥]", " ", t)
-    t = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", t)  # 4,980 → 4980
-    t = re.sub(r"(?<=\d)\.0+(?!\d)", "", t)  # 4980.00 → 4980
-    t = re.sub(
-        r"(?<!\d)[.:](?!\d)|(?<=\d)[.:](?!\d)|(?<!\d)[.:](?=\d)", " ", t
-    )  # keep 4.5 and 10:30, drop the rest
-    t = re.sub(r"[^\w\s.:%/@#+-]", " ", t)
-    t = re.sub(
-        r"(?<![\w])-|-(?![\w])", " ", t
-    )  # a dash between words or digits stays (INV-2026-0042)
-    return " ".join(t.split())
 
 
 def contains(haystack: str, needle: str) -> bool:

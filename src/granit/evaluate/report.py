@@ -26,7 +26,18 @@ CRITERIA: list[tuple[str, str, float, float]] = [
 ]
 JUDGE_AGREEMENT_MIN = 0.85
 REGRESSION = 0.02  # 2 points
-LOWER_IS_BETTER = ("asr.wer", "speed.")
+# Metrics where a drop is good: error rates, declines of answerable questions, invalid outputs, time.
+LOWER_IS_BETTER = (
+    "asr.wer",
+    "answers.false_declines",
+    "extraction.invalid",
+    "guardian.errors",
+    "speed.",
+    "tables.docling.s_per",
+    "tables.vision.s_per",
+)
+# Counts, not quality: never a regression (they change when the set or the number of controls does).
+NOT_COMPARED = ("guardian.judged", "guardian.controls.made", "asr.recordings", "speed.")
 
 
 def results_dir(set_name: str) -> Path:
@@ -103,8 +114,8 @@ def compare(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
         worse = delta is not None and (
             delta >= REGRESSION if key.startswith(LOWER_IS_BETTER) else delta <= -REGRESSION
         )
-        if key.startswith("speed."):
-            worse = False  # recorded, not a pass criterion in v1
+        if key.startswith(NOT_COMPARED):
+            worse = False  # counts, and speed (recorded, not a pass criterion in v1)
         rows.append(
             {"metric": key, "before": before, "after": after, "delta": delta, "regression": worse}
         )

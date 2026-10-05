@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v27 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v28 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v27: M0–M7 done; the judge check now has control answers (private set and the 50 hand labels pending).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v28: M0–M7 done; text-layer safety net + document titles in chunk context (public fact coverage 0.885 → 0.962); private set and the 50 hand labels pending.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -101,6 +101,11 @@ and the open findings are in §4.9 *First results*; the table default was decide
 **Changes in v27:** **control answers** for checking the judge (§4.9 *Trusting the judge*): real answers mostly pass, so 50 hand
 labels of real verdicts alone couldn't tell a good judge from one that always says "pass". Each run now also judges 12 deliberately
 wrong answers; Guardian caught 12 / 12 on the public set.
+
+**Changes in v28:** M7's first finding fixed. A **text-layer safety net** (§3.6) adds back what Granite-Docling dropped from
+digital PDFs, and **every chunk's context now starts with its document's title**, because Docling marks every heading level 1 and
+chunks lost which document they were from. Public set: fact coverage 0.885 → **0.962**, false declines 7.7 % → **0 %**, text-layer
+words missing from the chunks 1.3 % → 0.5 %; vector MRR@8 0.859 → 0.919.
 ---
 
 ## 1. Scope (v1)
@@ -567,7 +572,18 @@ of scope (licenses unchecked).
    loss:** Granite-Docling sometimes returns a table with no cells (an empty `<otsl>`: dense and long tables, and the line items of
    two invoice layouts). Such tables now always go to Vision, and Vision's cells replace Docling's in the document (and so in the
    chunks); Docling's own grids are kept in `derived/<id>/docling_tables.json` for the eval.
-5. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
+5. **Text-layer safety net (v28).** Granite-Docling also drops plain text on some layouts: on one invoice layout it kept the labels
+   ("Invoice number:") and dropped their values ("GS-2026-0117"), and it misread `PO-48502` as `PO48502`. For a **digital PDF**, each
+   line of the PDF's own text layer is compared with what Docling captured on that page (as canonical tokens: `$9,360.00` = `9360`,
+   any date format = ISO); a line with an uncaptured token containing a digit (an ID, amount or date), or with half its words
+   uncaptured, is added back under a top-level heading *"Text found only in the PDF's text layer (page N)"* with that page's
+   provenance, so it's searchable and cited by page. Headers and footers count as captured. Scans and images have no text layer
+   and are unchanged (they would need a Vision page pass). Public set: 4 + 4 field lines recovered on the two affected invoices, the
+   correct `PO-48502`, and the contacts Vision had glued together; text-layer words missing from the chunks 1.3 % → 0.5 %.
+   **Chunks also say which document they're from:** Docling marks every heading level 1, so a chunk kept only its nearest heading
+   ("Invoice") and lost the vendor; every chunk's context now starts with the document's first heading
+   ("Cedar & Pine Catering > Invoice").
+6. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
    valid, errors, page, crop, model + revision), ready for the `extractions` table (M4).
 
 **Form extraction (`VisionModel.extract_fields`, `granit extract FILE --schema S.json`)**
@@ -1394,9 +1410,11 @@ Granite-Docling.
 were fixed in the harness instead (written amounts like `$16,500` vs spoken words in WER; a misheard owner name counted twice).
 
 **Open findings (next steps, for decision):**
-1. **Granite-Docling drops field values next to their labels** on one invoice layout ("Invoice number:" kept, "GS-2026-0117" gone),
-   not fixable by the table fallback. Proposed: a **text-layer safety net** for digital PDFs (compare Docling's text with the PDF's own
-   text layer and add the missing lines to the page's chunks); scans would need a Vision page pass.
+1. ~~**Granite-Docling drops field values next to their labels**~~ **Fixed in v28** (§3.6 item 5): the text-layer safety net, plus
+   document titles in chunk context (with the recovered lines in view, the model had declined a question whose answer line didn't
+   say which vendor it came from). Public set `eval/results/2026-10-04-b6dc4e6-public.json`: **fact coverage 0.962** (passes;
+   document and cross-source questions 1.000), false declines **0**, MRR@8 up in every setup (vectors 0.859 → 0.919), Guardian
+   12 / 12 controls. Scans would still need a Vision page pass.
 2. **No speaker diarization:** action items said in the first person have no owner. A v1 limitation (diarization is not in the plan's
    model set); the summary prompt could ask for "unknown" explicitly.
 3. **Vision rewrites ISO dates** into an ambiguous `MM-DD-YYYY`: validation flags it (as designed); resolving the ambiguity against
@@ -1548,7 +1566,7 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | The mlx-vlm Vision port could differ from the reference Transformers output (DeepStack injection) | Golden tests against the card's example outputs; compare one sample with Transformers on MPS if needed |
 | Chart detection misses a chart (Vision answers "no") or charts a photo | Yes/no check measured on the card's chart and logo; misses leave the image as a placeholder (no wrong data); M7 public set adds charts of several types |
 | Vision rewrites field values (dates seen in M3) | `format: date` normalization + format check; ambiguous dates flagged, never guessed; M7 field accuracy |
-| Granite-Docling silently drops content (M7: empty tables in 6 of 21; field values on one invoice layout) | Empty tables → Vision at ingest (M7); text-layer coverage measured by the eval; text-layer safety net proposed (§4.9 *First results*) |
+| Granite-Docling silently drops content (M7: empty tables in 6 of 21; field values on one invoice layout) | Empty tables → Vision at ingest (M7); digital PDFs: text-layer safety net (v28, 0.5 % of words still uncaptured on the public set); scans: no text layer, a Vision page pass if the private set shows losses |
 | Tight transformers version window (≥ 5.16, Docling excludes some 5.x) | Commit `uv.lock`; upgrade deliberately |
 | MLX in Streamlit threads | Models only in the worker process / `mlx_lm.server` (by design) |
 | Thinking mode slows answers | **`reasoning_effort: "low"` by default (confirmed in M5)**; per-question toggle in the UI. On a 3K-token RAG prompt: off **rambled to the token limit** (32 s), low gave a short answer in 11 s, full thinking used its whole budget without answering. On the fixture library, low answers in 2–5 s. Known: on some questions low still narrates its reasoning in the answer ("…So answer: 145"); M7's answer checks track it |
@@ -1615,4 +1633,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Claude Code hooks | H1 format/lint after edits · H2 protected paths · H3 command guards (uv only, no `turboctc-nc`, no GPU-limit tuning) · H4 one phase at a time · H5 quality gate on Stop · H6 session context; shared via `.claude/settings.json` |
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
-| Next step | Your private eval set + 50 Guardian labels (`granit eval init/label/agreement`); then the M7 findings (text-layer safety net first) before 1.0 |
+| Next step | Your private eval set + 50 Guardian labels (`granit eval init/label/agreement`); then the open M7 findings it confirms (diarization, Vision date ambiguity) before 1.0 |

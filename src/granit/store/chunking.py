@@ -68,6 +68,23 @@ def _element(doc_items: list[Any]) -> str:
     return "text"
 
 
+def document_title(doc: Any) -> str:
+    """The first heading in reading order: the vendor on an invoice, the title of a report.
+
+    Granite-Docling marks every heading as level 1, so a chunk's own headings stop at the nearest one ("Invoice",
+    "Delivery Note") and lose which document it is. M7 found the model then declined questions that named the vendor.
+    """
+    from docling_core.types.doc import DocItemLabel
+
+    for item, _ in doc.iterate_items():
+        if (
+            getattr(item, "label", None) in (DocItemLabel.TITLE, DocItemLabel.SECTION_HEADER)
+            and item.text.strip()
+        ):
+            return item.text.strip()
+    return ""
+
+
 def _pieces(doc: Any) -> Iterator[_Piece]:
     from docling_core.transforms.chunker import HierarchicalChunker
     from docling_core.transforms.chunker.hierarchical_chunker import (
@@ -81,6 +98,7 @@ def _pieces(doc: Any) -> Iterator[_Piece]:
         def get_serializer(self, doc: Any) -> ChunkingDocSerializer:
             return ChunkingDocSerializer(doc=doc, table_serializer=MarkdownTableSerializer())
 
+    title = document_title(doc)
     for base in HierarchicalChunker(serializer_provider=MarkdownTables()).chunk(doc):
         chunk = DocChunk.model_validate(base)  # typed access to doc_items / headings
         text = chunk.text.strip()
@@ -88,9 +106,10 @@ def _pieces(doc: Any) -> Iterator[_Piece]:
             continue
         items = chunk.meta.doc_items
         pages = sorted({prov.page_no for item in items for prov in item.prov})
-        yield _Piece(
-            text, _element(items), CONTEXT_SEPARATOR.join(chunk.meta.headings or []), pages
-        )
+        headings = list(chunk.meta.headings or [])
+        if title and headings[:1] != [title]:
+            headings.insert(0, title)  # every chunk says which document it's from
+        yield _Piece(text, _element(items), CONTEXT_SEPARATOR.join(headings), pages)
 
 
 def chunk_document(doc: Any, target: int = TARGET_CHARS, limit: int = MAX_CHARS) -> list[NewChunk]:

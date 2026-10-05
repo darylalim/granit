@@ -25,10 +25,10 @@ def test_report_chunks_keep_headings_pages_and_element_types() -> None:
     summary = [(c.element, c.context, c.page_start, c.page_end) for c in chunks]
     assert summary == [
         ("text", "Quarterly Operations Report", 1, 1),
-        ("table", "Shipments by region (units)", 1, 1),
-        ("text", "Revenue", 2, 2),
-        ("chart", "Revenue", 2, 2),
-        ("text", "Revenue", 2, 2),
+        ("table", "Quarterly Operations Report > Shipments by region (units)", 1, 1),
+        ("text", "Quarterly Operations Report > Revenue", 2, 2),
+        ("chart", "Quarterly Operations Report > Revenue", 2, 2),
+        ("text", "Quarterly Operations Report > Revenue", 2, 2),
     ]
     table = chunks[1].text.splitlines()
     assert table[0].replace(" ", "") == "|Region|Q1|Q2|Q3|"  # column names, not "North, 1 = 1,240"
@@ -55,7 +55,10 @@ def test_small_text_under_one_heading_is_merged() -> None:
     doc.add_heading("Other")
     doc.add_text(label=DocItemLabel.TEXT, text="Different section.")
     chunks = chunk_document(doc)
-    assert [c.context for c in chunks] == ["Notes", "Other"]
+    assert [c.context for c in chunks] == [
+        "Notes",
+        "Notes > Other",
+    ]  # the first heading is the document's title
     assert chunks[0].text.count("Short paragraph") == 5
 
 

@@ -231,7 +231,19 @@ def test_recovered_lines_are_chunked_with_their_page_and_heading() -> None:
     documents.add_text_layer_lines(doc, documents.missing_lines(doc, lines))
     recovered = [c for c in chunk_document(doc) if "GS-2026-0117" in c.text]
     assert len(recovered) == 1 and recovered[0].page_start == 1
-    assert recovered[0].context == documents.TEXT_LAYER_HEADING.format(page=1)
+    assert recovered[0].context == "Granite Supply Co. > " + documents.TEXT_LAYER_HEADING.format(
+        page=1
+    )
+
+
+def test_text_layer_hyphens_are_real_hyphens() -> None:
+    """pdfium returns this PDF's hyphen as U+FFFE; the recovered ID must read PO-48502 (Docling had misread PO48502)."""
+    (line,) = [
+        x
+        for x in documents.text_layer_lines(EVAL_FILES / "invoices" / "inv-06.pdf")[1]
+        if "Purchase order" in x
+    ]
+    assert line.endswith("Purchase order: PO-48502") and "\ufffe" not in line
 
 
 def test_images_and_scans_have_no_text_layer() -> None:

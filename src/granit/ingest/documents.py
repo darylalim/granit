@@ -145,7 +145,8 @@ def text_layer_lines(path: Path) -> dict[int, list[str]]:
         out = {}
         for number, page in enumerate(pdf, start=1):
             text = page.get_textpage().get_text_range()
-            lines = [" ".join(line.split()) for line in text.splitlines()]
+            # pdfium reports some hyphens as U+FFFE (its soft-hyphen marker): PO-48502 came back as "PO\ufffe48502"
+            lines = [" ".join(line.replace("\ufffe", "-").split()) for line in text.splitlines()]
             if lines := [line for line in lines if line]:
                 out[number] = lines
         return out

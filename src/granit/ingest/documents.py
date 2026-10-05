@@ -128,6 +128,79 @@ def is_empty_table(table: Any) -> bool:
     return not table.data.table_cells or not any(c.text.strip() for c in table.data.table_cells)
 
 
+# ── the text-layer safety net (M7 finding: Granite-Docling drops some text, e.g. field values next to their labels) ──
+
+TEXT_LAYER_HEADING = "Text found only in the PDF's text layer (page {page})"
+MISSING_SHARE = 0.5  # a line is missing if half its words are, or any token with a digit (an ID, amount or date) is
+
+
+def text_layer_lines(path: Path) -> dict[int, list[str]]:
+    """A digital PDF's own text, line by line, per page (1-based). Empty for images and for scans without a text layer."""
+    if path.suffix.lower() != ".pdf":
+        return {}
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(path)
+    try:
+        out = {}
+        for number, page in enumerate(pdf, start=1):
+            text = page.get_textpage().get_text_range()
+            lines = [" ".join(line.split()) for line in text.splitlines()]
+            if lines := [line for line in lines if line]:
+                out[number] = lines
+        return out
+    finally:
+        pdf.close()
+
+
+def _tokens(text: str) -> list[str]:
+    from granit.store.text import canonical
+
+    return [t for t in canonical(text).split() if len(t) > 1 or t.isdigit()]
+
+
+def missing_lines(doc: Any, lines_by_page: dict[int, list[str]]) -> dict[int, list[str]]:
+    """Text-layer lines whose content Docling didn't capture on that page, compared as canonical tokens (``$9,360.00`` =
+    ``9360``, any date format = ISO). Headers and footers count as captured, so they aren't recovered as noise."""
+    from docling_core.types.doc import ContentLayer
+
+    out = {}
+    for page, lines in lines_by_page.items():
+        markdown = doc.export_to_markdown(page_no=page, included_content_layers=set(ContentLayer))
+        captured = set(_tokens(markdown))
+        missing = []
+        for line in lines:
+            tokens = _tokens(line)
+            gone = [t for t in tokens if t not in captured]
+            has_digit = any(c.isdigit() for t in gone for c in t)
+            if gone and (has_digit or len(gone) / len(tokens) >= MISSING_SHARE):
+                missing.append(line)
+        if missing:
+            out[page] = missing
+    return out
+
+
+def add_text_layer_lines(doc: Any, missing: dict[int, list[str]]) -> int:
+    """Append the missing lines under one heading per page, with that page's provenance (so chunks cite the right page)."""
+    from docling_core.types.doc import BoundingBox, DocItemLabel, ProvenanceItem
+
+    def on(page: int, text: str) -> Any:
+        return ProvenanceItem(
+            page_no=page, bbox=BoundingBox(l=0, t=0, r=1, b=1), charspan=(0, len(text))
+        )
+
+    added = 0
+    for page, lines in sorted(missing.items()):
+        heading = TEXT_LAYER_HEADING.format(page=page)
+        doc.add_heading(
+            heading, level=1, prov=on(page, heading)
+        )  # top level: not under the last heading
+        for line in lines:
+            doc.add_text(label=DocItemLabel.TEXT, text=line, prov=on(page, line))
+            added += 1
+    return added
+
+
 def is_large_enough(item: Any, minimum: float = MIN_PICTURE_SIZE) -> bool:
     """Judged on the element's own box in page units (not the padded, scaled crop)."""
     if not item.prov:
@@ -211,9 +284,10 @@ class DocumentResult:
     pictures: int = 0  # pictures found by Docling
     charts: int = 0
     tables: int = 0
-    tables_from_vision: int = (
-        0  # tables whose cells Vision supplied (accurate tables, or Docling left them empty)
-    )
+    # tables whose cells Vision supplied (accurate tables, or Docling left them empty)
+    tables_from_vision: int = 0
+    # lines Docling missed, added back from the PDF's own text layer
+    text_layer_lines: int = 0
     seconds: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> dict[str, Any]:
@@ -221,6 +295,7 @@ class DocumentResult:
             "pages": self.pages,
             "tables": self.tables,
             "tables_from_vision": self.tables_from_vision,
+            "text_layer_lines": self.text_layer_lines,
             "pictures": self.pictures,
             "charts": self.charts,
             "extractions": len(self.extractions),
@@ -316,6 +391,10 @@ class DocumentIngestor:
         finally:
             pages.close()
 
+        start = time.perf_counter()
+        text_layer = add_text_layer_lines(doc, missing_lines(doc, text_layer_lines(path)))
+        seconds["text_layer"] = round(time.perf_counter() - start, 3)
+
         drop_images(
             doc
         )  # crops are saved separately; embedded base64 pages would bloat document.json
@@ -332,6 +411,7 @@ class DocumentIngestor:
             charts=charts,
             tables=len(doc.tables),
             tables_from_vision=tables_from_vision,
+            text_layer_lines=text_layer,
             seconds=seconds,
         )
 

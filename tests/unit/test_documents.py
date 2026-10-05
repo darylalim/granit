@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -154,3 +155,87 @@ def test_fixture_manifest_is_consistent() -> None:
     schema = json.loads((FIXTURES / "invoice_schema.json").read_text())
     expected = MANIFEST["invoice.png"]["expected"]
     assert set(expected) | set(MANIFEST["invoice.png"]["absent"]) == set(schema["properties"])
+
+
+# ── the text-layer safety net (M7: Granite-Docling dropped field values next to their labels) ──
+
+EVAL_FILES = ROOT / "eval" / "public" / "files"
+
+
+def as_docling_saw_inv01() -> Any:
+    """inv-01 as Granite-Docling transcribed it: labels without their values, and the line items (Vision filled them)."""
+    from docling_core.types.doc import (
+        BoundingBox,
+        DocItemLabel,
+        DoclingDocument,
+        ProvenanceItem,
+        Size,
+        TableData,
+    )
+
+    def on(text: str) -> ProvenanceItem:
+        return ProvenanceItem(
+            page_no=1, bbox=BoundingBox(l=0, t=0, r=1, b=1), charspan=(0, len(text))
+        )
+
+    doc = DoclingDocument(name="inv-01")
+    doc.add_page(page_no=1, size=Size(width=612, height=792))
+    for label, text in [
+        (DocItemLabel.SECTION_HEADER, "Granite Supply Co."),
+        (DocItemLabel.TEXT, "12 Quarry Lane, Barre, VT 05641"),
+        (DocItemLabel.SECTION_HEADER, "INVOICE"),
+        (DocItemLabel.TEXT, "Invoice number:"),
+        (DocItemLabel.TEXT, "Invoice date:"),
+        (DocItemLabel.TEXT, "Due date:"),
+        (DocItemLabel.TEXT, "Purchase order:"),
+        (DocItemLabel.TEXT, "Bill to:"),
+        (DocItemLabel.TEXT, "Northwind Logistics Ltd. 400 Harbor Road, Portland, ME 04101"),
+    ]:
+        doc.add_text(label=label, text=text, prov=on(text))
+    table = doc.add_table(data=TableData(num_rows=0, num_cols=0), prov=on("table"))
+    documents.fill_table(
+        table,
+        [
+            ["Description", "Qty", "Unit price", "Amount"],
+            ["Granite countertop slabs", "12", "$780.00", "$9,360.00"],
+            ["Edge polishing", "12", "$95.00", "$1,140.00"],
+            ["Delivery and installation", "1", "$2,140.00", "$2,140.00"],
+            ["Total due", "", "", "$12,640.00"],
+        ],
+    )
+    return doc
+
+
+def test_the_text_layer_gives_back_exactly_what_docling_dropped() -> None:
+    lines = documents.text_layer_lines(EVAL_FILES / "invoices" / "inv-01.pdf")
+    assert "Invoice number: GS-2026-0117" in lines[1]
+    doc = as_docling_saw_inv01()
+    missing = documents.missing_lines(doc, lines)
+    assert missing == {
+        1: [
+            "Invoice number: GS-2026-0117",
+            "Invoice date: August 3, 2026",
+            "Due date: September 2, 2026",
+            "Purchase order: PO-48213",
+        ]
+    }
+    assert documents.add_text_layer_lines(doc, missing) == 4
+    assert documents.missing_lines(doc, lines) == {}  # nothing left to add
+
+
+def test_recovered_lines_are_chunked_with_their_page_and_heading() -> None:
+    from granit.store.chunking import chunk_document
+
+    doc = as_docling_saw_inv01()
+    lines = documents.text_layer_lines(EVAL_FILES / "invoices" / "inv-01.pdf")
+    documents.add_text_layer_lines(doc, documents.missing_lines(doc, lines))
+    recovered = [c for c in chunk_document(doc) if "GS-2026-0117" in c.text]
+    assert len(recovered) == 1 and recovered[0].page_start == 1
+    assert recovered[0].context == documents.TEXT_LAYER_HEADING.format(page=1)
+
+
+def test_images_and_scans_have_no_text_layer() -> None:
+    assert documents.text_layer_lines(FIXTURES / "invoice.png") == {}
+    assert (
+        documents.text_layer_lines(EVAL_FILES / "invoices" / "inv-05.pdf") == {}
+    )  # a scan: pictures only

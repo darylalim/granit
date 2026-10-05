@@ -1,0 +1,369 @@
+{
+  "date": "2026-10-04",
+  "labeled": 50,
+  "n": 50,
+  "agreement": 0.92,
+  "kappa": 0.8099,
+  "real": {
+    "n": 38,
+    "agreement": 0.9211,
+    "kappa": 0.5366
+  },
+  "controls": {
+    "n": 12,
+    "agreement": 0.9167,
+    "kappa": 0.0
+  },
+  "labels": [
+    {
+      "id": "mtg-02",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-04~swap",
+      "criterion": "answer_relevance",
+      "control": "swap",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-10",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-03",
+      "criterion": "groundedness",
+      "control": null,
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-14",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-02",
+      "criterion": "groundedness",
+      "control": null,
+      "human": false,
+      "guardian": true
+    },
+    {
+      "id": "doc-02~number",
+      "criterion": "groundedness",
+      "control": "number",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-09",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-04",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "mtg-01~swap",
+      "criterion": "answer_relevance",
+      "control": "swap",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-12",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-13",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-06",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-05",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-12~swap",
+      "criterion": "answer_relevance",
+      "control": "swap",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-15",
+      "criterion": "groundedness",
+      "control": null,
+      "human": false,
+      "guardian": true
+    },
+    {
+      "id": "x-02~swap",
+      "criterion": "answer_relevance",
+      "control": "swap",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-07",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-01",
+      "criterion": "groundedness",
+      "control": null,
+      "human": false,
+      "guardian": true
+    },
+    {
+      "id": "doc-03",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-07~swap",
+      "criterion": "answer_relevance",
+      "control": "swap",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-06",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-04",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-08~swap",
+      "criterion": "answer_relevance",
+      "control": "swap",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "mtg-05~swap",
+      "criterion": "answer_relevance",
+      "control": "swap",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-10~number",
+      "criterion": "groundedness",
+      "control": "number",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "mtg-01",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-02",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-15",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-04",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-10",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-03",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-14~number",
+      "criterion": "groundedness",
+      "control": "number",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-13",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-05",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-03~number",
+      "criterion": "groundedness",
+      "control": "number",
+      "human": true,
+      "guardian": false
+    },
+    {
+      "id": "mtg-03",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-02",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-14",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-07",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-11",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-05",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-08",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-11",
+      "criterion": "answer_relevance",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-12",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-04",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-06~number",
+      "criterion": "groundedness",
+      "control": "number",
+      "human": false,
+      "guardian": false
+    },
+    {
+      "id": "doc-09",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "mtg-05",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    },
+    {
+      "id": "doc-08",
+      "criterion": "groundedness",
+      "control": null,
+      "human": true,
+      "guardian": true
+    }
+  ]
+}

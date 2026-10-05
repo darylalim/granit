@@ -13,6 +13,7 @@ Input and output are injectable (``ask``, ``show``), so both are unit-tested wit
 from __future__ import annotations
 
 import json
+import textwrap
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -127,7 +128,12 @@ def agreement(
         show(f"Question: {item['question']}\nAnswer: {item['answer']}")
         if v["criterion"] == "groundedness":
             for i, doc in enumerate(item["documents"], start=1):
-                show(f"  source {i}: {' '.join(doc.split())[:300]}")
+                # The whole source: the 2026-10-04 check cut sources at 300 characters, which hid the evidence for two
+                # correct answers (a table's week 7, a transcript's later line) and made those labels "no".
+                show(
+                    f"  source {i}:\n"
+                    + textwrap.indent(textwrap.fill(" ".join(doc.split()), width=110), "    ")
+                )
         reply = ask(f"{PLAIN[v['criterion']]} (y / n; s = skip; q = quit): ").strip().lower()
         if reply == "q":
             break

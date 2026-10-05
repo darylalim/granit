@@ -2,8 +2,9 @@
 
 - ``granit eval label``: for each question, the hybrid + rerank top 20 chunks; you type the numbers of the relevant ones,
   which become ``gold_refs`` (file hash + page or time range, so labels survive re-chunking). ~2 minutes per question.
-- ``granit eval agreement``: Guardian's verdicts from the latest run, one at a time; you answer y / n. Agreement and
-  Cohen's κ go to ``judge_agreement.json`` next to the set's questions. Guardian metrics count toward the pass criteria
+- ``granit eval agreement``: Guardian's verdicts from the latest run, one at a time, blind; you answer y / n. Up to a third
+  are on control answers (``controls.py``), so the sample has failures to catch. Agreement and Cohen's κ go to
+  ``judge_agreement.json`` next to the set's questions. Guardian metrics count toward the pass criteria
   only at ≥ 85 % agreement (``report.JUDGE_AGREEMENT_MIN``).
 
 Input and output are injectable (``ask``, ``show``), so both are unit-tested without a terminal.
@@ -20,6 +21,7 @@ from typing import Any
 import yaml
 
 from granit.evaluate import metrics as m
+from granit.evaluate.controls import EXPECTED_FAILURE, SEPARATOR
 from granit.evaluate.dataset import EvalSet
 
 Ask = Callable[[str], str]
@@ -92,16 +94,36 @@ def latest_verdicts(library: Path) -> dict[str, Any]:
     return json.loads(runs[-1].read_text())
 
 
+def sample(run: dict[str, Any], n: int) -> list[dict[str, Any]]:
+    """Up to ``n`` verdicts to label: controls (on the criterion that should fail) are at most a third, so both outcomes
+    are well represented; the rest are real answers. Shuffled with a fixed seed: the same run gives the same sample."""
+    import random
+
+    kinds = {i["id"]: i.get("control") for i in run["items"]}
+    scored = [v for v in run["verdicts"] if v["passed"] is not None]
+    controls = [
+        v
+        for v in scored
+        if kinds.get(v["id"]) and v["criterion"] == EXPECTED_FAILURE[kinds[v["id"]]]
+    ]
+    real = [v for v in scored if not kinds.get(v["id"])]
+    chosen = controls[: n // 3]
+    chosen += real[: n - len(chosen)]
+    random.Random(0).shuffle(chosen)
+    return chosen
+
+
 def agreement(
     eval_set: EvalSet, library: Path, *, ask: Ask = input, show: Show = print, n: int = 50
 ) -> dict[str, Any]:
-    """Label up to ``n`` verdicts by hand; save and return agreement and Cohen's κ against Guardian."""
+    """Label up to ``n`` verdicts by hand, blind (neither Guardian's verdict nor which answers are controls is shown);
+    save and return agreement and Cohen's κ against Guardian, overall and for real answers and controls separately."""
     run = latest_verdicts(library)
     items = {i["id"]: i for i in run["items"]}
     labels = []
-    for v in [v for v in run["verdicts"] if v["passed"] is not None][:n]:
+    for v in sample(run, n):
         item = items[v["id"]]
-        show(f"\n[{len(labels) + 1}] {v['id']} · {v['criterion']}")
+        show(f"\n[{len(labels) + 1}] {v['id'].split(SEPARATOR)[0]} · {v['criterion']}")
         show(f"Question: {item['question']}\nAnswer: {item['answer']}")
         if v["criterion"] == "groundedness":
             for i, doc in enumerate(item["documents"], start=1):
@@ -115,21 +137,28 @@ def agreement(
             {
                 "id": v["id"],
                 "criterion": v["criterion"],
+                "control": item.get("control"),
                 "human": reply == "y",
                 "guardian": v["passed"],
             }
         )
+    result = {"date": datetime.now().strftime("%Y-%m-%d"), "labeled": len(labels), **_agree(labels)}
+    for subset, keep in (("real", False), ("controls", True)):
+        result[subset] = _agree([x for x in labels if bool(x["control"]) == keep])
+    result["labels"] = labels
+    (eval_set.root / "judge_agreement.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
+def _agree(labels: list[dict[str, Any]]) -> dict[str, Any]:
     human, guardian = [x["human"] for x in labels], [x["guardian"] for x in labels]
-    result = {
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "labeled": len(labels),
+    kappa = m.cohens_kappa(human, guardian)
+    return {
+        "n": len(labels),
         "agreement": round(
             sum(h == g for h, g in zip(human, guardian, strict=True)) / len(labels), 4
         )
         if labels
         else None,
-        "kappa": None if (k := m.cohens_kappa(human, guardian)) is None else round(k, 4),
-        "labels": labels,
+        "kappa": None if kappa is None else round(kappa, 4),
     }
-    (eval_set.root / "judge_agreement.json").write_text(json.dumps(result, indent=2) + "\n")
-    return result

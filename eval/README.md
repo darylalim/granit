@@ -51,5 +51,9 @@ Guardian is a Granite model judging a Granite model. Its metrics are **informati
 uv run granit eval agreement --set public           # 50 verdicts by hand, y / n → judge_agreement.json
 ```
 
-At ≥ 85 % agreement (Cohen's κ is reported too) Guardian's groundedness counts toward the pass criteria. Repeat after any
-Guardian or prompt change.
+You see the question, the answer and (for groundedness) its sources; never Guardian's verdict. Up to a third are **control
+answers**: deliberately wrong copies (a changed number, or another question's answer) that each run plants to test the judge.
+They aren't marked, so judge every answer on its own. At ≥ 85 % agreement (Cohen's κ is reported too, also for real answers and
+controls separately) Guardian's groundedness counts toward the pass criteria. Repeat after any Guardian or prompt change.
+
+Every run also reports `guardian.controls.caught`: the share of planted errors Guardian caught (12 / 12 on the public set).

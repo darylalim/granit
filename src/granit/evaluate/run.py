@@ -34,6 +34,7 @@ from granit.config import (
 )
 from granit.evaluate import metrics as m
 from granit.evaluate import report
+from granit.evaluate.controls import caught, is_control, make_controls
 from granit.evaluate.dataset import EvalSet
 from granit.models.phases import PhaseManager, run_worker_process
 from granit.search.hybrid import MODES, Hit
@@ -50,6 +51,9 @@ class EvalConfig:
     thinking: str = "low"
     judge: bool = True
     fresh: bool = False
+    controls: int = (
+        12  # deliberately wrong answers judged alongside the real ones (evaluate/controls.py)
+    )
 
 
 Log = Callable[[str], None]
@@ -186,19 +190,22 @@ class Runner:
             timings["phase_b_s"] = round(time.perf_counter() - start, 1)
 
             verdicts: list[dict[str, Any]] = []
+            controls = make_controls(items, self.config.controls) if self.config.judge else []
             if self.config.judge and items:
-                self.log(f"Phase C: Guardian judges {len(items)} answers…")
+                self.log(
+                    f"Phase C: Guardian judges {len(items)} answers and {len(controls)} control answers…"
+                )
                 start = time.perf_counter()
-                verdicts = self.judge(items, self.library, self.log)
+                verdicts = self.judge(items + controls, self.library, self.log)
                 timings["phase_c_s"] = round(time.perf_counter() - start, 1)
                 (self.library / f"verdicts-{datetime.now():%Y%m%d-%H%M%S}.json").write_text(
-                    json.dumps({"items": items, "verdicts": verdicts}, indent=1)
+                    json.dumps({"items": items + controls, "verdicts": verdicts}, indent=1)
                 )
 
             metrics = {
                 "retrieval": self._retrieval(rows),
                 "answers": self._answers(rows),
-                "guardian": self._guardian(verdicts),
+                "guardian": self._guardian(verdicts, controls),
                 "extraction": self._extraction(store, sources, extract_jobs),
                 "tables": self._tables(store, sources),
                 "summaries": summaries,
@@ -353,8 +360,13 @@ class Runner:
             },
         }
 
-    def _guardian(self, verdicts: list[dict[str, Any]]) -> dict[str, Any]:
-        out: dict[str, Any] = {}
+    def _guardian(
+        self, verdicts: list[dict[str, Any]], controls: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        out: dict[str, Any] = {"controls": caught(controls, verdicts)}
+        verdicts = [
+            v for v in verdicts if not is_control(v["id"])
+        ]  # pass rates are about real answers only
         for criterion in ("groundedness", "answer_relevance"):
             scored = [
                 v["passed"]

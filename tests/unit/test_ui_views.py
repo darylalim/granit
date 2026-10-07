@@ -169,3 +169,25 @@ def test_model_label() -> None:
         == "granite-vision-4.1-4b @ 37d591f"
     )
     assert views.model_label("local-model") == "local-model"
+
+
+def test_vocabulary_box_round_trips(store: Store) -> None:
+    assert views.save_vocabulary(store, "Northbeam\nPriya, Elena\n\n") == [
+        "Northbeam",
+        "Priya",
+        "Elena",
+    ]
+    assert views.vocabulary_text(store.vocabulary()) == "Northbeam\nPriya\nElena"
+
+
+def test_recordings_with_another_names_list_can_be_retranscribed(store: Store) -> None:
+    audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
+    doc, _ = store.add_file(FIXTURES / "documents" / "report.pdf")
+    store.conn.execute(
+        "UPDATE sources SET info = ? WHERE id = ?",
+        (json.dumps({"vocabulary": ["Priya"]}), audio.id),
+    )
+    audio = store.source(audio.id)
+    assert not views.other_vocabulary(audio, ["Priya"])
+    assert views.other_vocabulary(audio, ["Priya", "Northbeam"])
+    assert not views.other_vocabulary(doc, ["Priya", "Northbeam"])  # documents don't use it

@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from granit.ingest.audio import Segment, Transcript
+from granit.ingest.audio import Segment, Transcript, Word
 from granit.ingest.vision import Extraction
 from granit.ingest.worker import IngestWorker
 from granit.store.db import Store
@@ -82,6 +82,34 @@ def store(tmp_path: Path) -> Store:
     return Store(tmp_path / "data")
 
 
+class WordsTranscriber(FakeTranscriber):
+    def transcribe(self, path: Path) -> Transcript:
+        words = (
+            Word("renew", 1.0, 1.4),
+            Word("north", 1.5, 1.8),
+            Word("beam", 1.8, 2.1),
+            Word("today.", 2.2, 2.6),
+        )
+        return Transcript(
+            12.7, 6.4, 1, (Segment(1.0, 2.6, "renew north beam today.", words),), "speech@rev"
+        )
+
+
+def test_recordings_are_spelled_with_the_library_vocabulary(store: Store) -> None:
+    store.set_vocabulary(["Northbeam", "Priya"])
+    audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
+    assert not worker(store, transcriber=WordsTranscriber()).run(log=lambda _: None).failed
+    audio = store.source(audio.id)
+    assert audio.info["vocabulary"] == ["Northbeam", "Priya"]
+    saved = json.loads((store.derived_dir(audio) / "transcript.json").read_text())
+    assert saved["segments"][0]["text"] == "renew Northbeam today."
+    assert (
+        store.conn.execute("SELECT text FROM chunks")
+        .fetchone()[0]
+        .endswith("renew Northbeam today.")
+    )
+
+
 def test_worker_ingests_audio_and_documents(store: Store) -> None:
     audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
     doc, _ = store.add_file(FIXTURES / "documents" / "report.pdf")
@@ -96,6 +124,7 @@ def test_worker_ingests_audio_and_documents(store: Store) -> None:
         "speech_s": 6.4,
         "silence_s": 6.3,
         "segments": 1,
+        "vocabulary": [],
         "chunks": 1,
     }
     assert doc.info["chunks"] == 5 and doc.info["charts"] == 1

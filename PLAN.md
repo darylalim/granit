@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v35 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v36 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v35: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v36: M0–M7 done; **the public set passes every 1.0 criterion**; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -157,6 +157,13 @@ Vision, unlike its page reading. An ambiguous date takes the one reading the tex
 misread name takes the single closest run of words in the text (`Sam Okator` → `Sam Okafor`). Public extraction field accuracy
 0.935 → **0.984** (passes), invalid extractions 1 → 0; the one field left is `approved_by`, printed under "Manager approval"
 (not guessed from labels). Public WER (0.055) is the last failing public gate.
+
+**Changes in v36:** **names and terms in recordings** (§3.5 *Vocabulary*): the library keeps a list of the names people expect
+(set on the Ingest page), and a recording's words are spelled that way after transcription (`north beam` → Northbeam, `pria`
+→ Priya). The list used is recorded per recording; **Re-transcribe** in the Library applies a changed list. Eval sets may
+carry a `vocabulary.txt` (the public one: the four people, Northbeam, Tacoma, Atlas). Public WER 0.055 → **0.029**
+(vendor-review 0.112 → 0.034), fact coverage 0.981 → **1.000**: **the public set passes**. Layout check: 24 + 24 screenshots,
+0 problems (Library with a recording: Re-transcribe beside Summarize at 760 px).
 ---
 
 ## 1. Scope (v1)
@@ -558,6 +565,14 @@ decode(path):  .wav .flac .mp3 .ogg        → miniaudio (in-process) → 16 kHz
                .m4a .aac .aiff .caf .mp4   → afconvert -f WAVE -d LEI16@16000 -c 1 (temp file) → miniaudio
                anything else               → clear error ("convert to WAV or M4A"); ffmpeg only if the user installed it
 ```
+
+**Vocabulary (v36).** CTC decoding can't be prompted with expected words, so names are corrected afterwards, at the word level:
+the library's names and terms (`Store.vocabulary`, the Ingest page's *Names and terms in recordings*, one per line or
+comma-separated) are applied by `audio.apply_vocabulary` in the worker. A run of up to 3 words that joins to a term becomes it
+(`north beam` → Northbeam, `tacoma wa` → Tacoma WA); a single word ≥ 0.85 similar to a term of 5+ letters does too (`pria` →
+Priya). Shorter terms match only exactly, so `same` never becomes Sam. The new word spans the run's time; punctuation after it
+is kept. The list used is saved in the recording's info; Library's **Re-transcribe** (enabled when the list has changed) queues
+it again. Changing the list never edits existing transcripts on its own.
 
 **Pipeline (`ingest/audio.py`, built in M2)**
 1. **Decode** → 16 kHz mono (above). A WAV whose codec miniaudio can't read (e.g. μ-law) falls back to `afconvert`.
@@ -1484,7 +1499,7 @@ Granite-Docling.
 | Extraction field accuracy | 0.935 | ≥ 0.98 | ❌ 4 of 62 fields: `Sam Okator`, a missed `approved_by`, two ISO dates rewritten as `09-05-2026` (flagged invalid, never guessed). **v35: 0.984 ✅** (text layer; `approved_by` left) |
 | Table cell F1 | **0.997** | ≥ 0.95 | ✅ with the empty-table fallback (Docling alone: 0.747) |
 | Action-item recall | 0.833 | ≥ 0.90 | ❌ "*I'll* post the job ads": no speaker diarization, so no owner (v31: the name was never said; the fixture now says it, 1.000) |
-| WER | 0.056 | ≤ 0.05 | ❌ vendor-review 0.112: "Northbeam" → "north beam", "Priya" → "pria"; the other two 0.018 and 0.037 |
+| WER | 0.056 | ≤ 0.05 | ✅ **v36: 0.029** (vocabulary). Was ❌ vendor-review 0.112: "Northbeam" → "north beam", "Priya" → "pria"; the other two 0.018 and 0.037 |
 | Answer time p50 / p90 | 4.6 / 6.1 s | (recorded) | first token 2.8 / 4.6 s |
 
 **Thresholds are not changed:** every failure above is a real gap, not a measurement problem. Measurement problems found on the way

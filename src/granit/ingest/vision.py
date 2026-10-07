@@ -326,6 +326,82 @@ def normalize_dates(value: Any, schema: dict[str, Any]) -> Any:
     return value
 
 
+# numeric, "5 September 2026", "September 5, 2026": searched separately, within a line
+_DATES_IN_TEXT = (
+    re.compile(r"\b\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}\b"),
+    re.compile(r"\b\d{1,2}[ \t-]+[A-Za-z]+\.?[ \t-]+\d{4}\b"),
+    re.compile(r"\b[A-Za-z]+\.?[ \t]+\d{1,2},?[ \t]+\d{4}\b"),
+)
+_SNAP_RATIO = 0.85
+
+
+def _date_readings(text: str) -> set[str]:
+    """Both day/month orders of a numeric date that ``to_iso_date`` finds ambiguous (``09-05-2026``)."""
+    import contextlib
+    import datetime as dt
+
+    match = _NUMERIC_DATE.match(text.strip())
+    if not match or len(match.group(3)) != 4:
+        return set()
+    a, b, year = (int(g) for g in match.groups())
+    readings = set()
+    for month, day in ((a, b), (b, a)):
+        with contextlib.suppress(ValueError):  # not a date in that order (month 13)
+            readings.add(dt.date(year, month, day).isoformat())
+    return readings
+
+
+def _snap(value: str, text: str) -> str:
+    """``value`` if the text has it; else the one run of text words closest to it (ratio ≥ 0.85), else ``value``."""
+    from difflib import SequenceMatcher
+
+    if " ".join(value.lower().split()) in " ".join(text.lower().split()):
+        return value
+    n, words = len(value.split()), text.split()
+    scored = sorted(
+        (
+            (SequenceMatcher(None, value.lower(), window.lower()).ratio(), window)
+            for window in {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
+        ),
+        reverse=True,
+    )
+    if scored and scored[0][0] >= _SNAP_RATIO and (len(scored) == 1 or scored[1][0] < scored[0][0]):
+        return scored[0][1]
+    return value
+
+
+def resolve_against_text(value: Any, schema: dict[str, Any], text: str) -> Any:
+    """Correct extracted values with the document's own text layer (independent of Vision, so its errors differ).
+
+    - A ``"format": "date"`` value ``to_iso_date`` can't order (``09-05-2026``) takes the one reading the text has.
+    - A string with letters the text doesn't contain ("Sam Okator") takes the single closest run of words in the text
+      ("Sam Okafor"). Numbers and amounts are left alone: the nearest similar number may be a different one.
+    """
+    if isinstance(value, dict) and isinstance(schema.get("properties"), dict):
+        return {
+            key: resolve_against_text(item, schema["properties"].get(key, {}), text)
+            for key, item in value.items()
+        }
+    if isinstance(value, list) and isinstance(schema.get("items"), dict):
+        return [resolve_against_text(item, schema["items"], text) for item in value]
+    if not isinstance(value, str) or not text:
+        return value
+    if schema.get("format") == "date":
+        if to_iso_date(value):
+            return value
+        in_text = {
+            iso
+            for pattern in _DATES_IN_TEXT
+            for m in pattern.findall(text)
+            if (iso := to_iso_date(m))
+        }
+        found = _date_readings(value) & in_text
+        return found.pop() if len(found) == 1 else value
+    if re.search(r"[A-Za-z]", value):
+        return _snap(value, text)
+    return value
+
+
 def drop_nulls(value: Any, path: str = "") -> tuple[Any, list[str]]:
     """Remove null fields (the model's "not found"), returning the cleaned value and the dotted paths removed."""
     if isinstance(value, dict):
@@ -503,8 +579,13 @@ class VisionModel:
     def table_to_html(self, image: Any, **where: Any) -> Extraction:
         return self._task(image, "<tables_html>", "table", "html", where)
 
-    def extract_fields(self, images: list[Any], schema: dict[str, Any], **where: Any) -> Extraction:
-        """Schema-based key-value extraction over one or more page images (merged page by page)."""
+    def extract_fields(
+        self, images: list[Any], schema: dict[str, Any], text: str = "", **where: Any
+    ) -> Extraction:
+        """Schema-based key-value extraction over one or more page images (merged page by page).
+
+        ``text`` is the document's own text layer, if it has one: values are checked against it (``resolve_against_text``).
+        """
         check_schema(schema)
         start = time.perf_counter()
         raws, pages, errors = [], [], []
@@ -531,7 +612,8 @@ class VisionModel:
                 seconds=seconds,
                 **where,
             )
-        cleaned, problems, missing = validate(merge_pages(pages), schema)
+        merged = resolve_against_text(merge_pages(pages), schema, text)
+        cleaned, problems, missing = validate(merged, schema)
         return Extraction(
             "form",
             "json",

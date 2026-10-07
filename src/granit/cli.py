@@ -302,13 +302,19 @@ def _convert(args: argparse.Namespace) -> int:
 
 
 def _extract(args: argparse.Namespace) -> int:
-    from granit.ingest.documents import check_format, render_pages
+    from granit.ingest.documents import check_format, render_pages, text_layer_lines
     from granit.ingest.vision import VisionModel, check_schema
 
     schema = json.loads(args.schema.read_text())
     check_schema(schema)  # a bad schema fails before any model loads
     check_format(args.file)
-    extraction = VisionModel().load().extract_fields(render_pages(args.file, args.pages), schema)
+    pages = render_pages(args.file, args.pages)
+    text = "\n".join(
+        line
+        for _, lines in sorted(text_layer_lines(args.file).items())[: len(pages)]
+        for line in lines
+    )
+    extraction = VisionModel().load().extract_fields(pages, schema, text)
     print(json.dumps(extraction.data, indent=2, ensure_ascii=False))
     if extraction.missing:
         print(f"not found: {', '.join(extraction.missing)}", file=sys.stderr)

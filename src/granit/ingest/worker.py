@@ -156,14 +156,19 @@ class IngestWorker:
         return f"{len(chunks)} chunks, {len(extractions)} extractions"
 
     def _extract(self, job: Job) -> str:
-        from granit.ingest.documents import check_format, render_pages
+        from granit.ingest.documents import check_format, render_pages, text_layer_lines
 
         source = self.store.source(job.source_id)
         path = self.store.file_path(source)
         check_format(path)
         schema = job.params["schema"]
         pages = render_pages(path, max_pages=int(job.params.get("pages", MAX_FORM_PAGES)))
-        e = self.documents.vision.extract_fields(pages, schema)
+        text = "\n".join(
+            line
+            for _, lines in sorted(text_layer_lines(path).items())[: len(pages)]
+            for line in lines
+        )
+        e = self.documents.vision.extract_fields(pages, schema, text)
         self.store.complete_extract(
             job,
             NewExtraction(

@@ -53,7 +53,9 @@ class FakeDocuments:
             summary=lambda: {"pages": 2, "charts": 1},
         )
 
-    def extract_fields(self, pages: list[Any], schema: dict[str, Any]) -> Extraction:
+    def extract_fields(
+        self, pages: list[Any], schema: dict[str, Any], text: str = ""
+    ) -> Extraction:
         return Extraction(
             "form",
             "json",

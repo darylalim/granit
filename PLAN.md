@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v34 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v35 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v34: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v35: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -151,6 +151,12 @@ speakers overlap or backchannel (VAD keeps 72–89 % of the audio, no long gaps)
 TurboCTC glues "o'clock" to the hour as a 0 (`20 clock`, `110 clock`); `audio.fix_oclock` splits an hour 1–12 + `0` before
 "clock" back into `2 o'clock`, timestamps shared. WER 0.178 → 0.178; mtg-01's transcript now says "2 o'clock", but the answer
 takes the first time proposed (11) over the one agreed (2): a Q&A finding, not ASR.
+
+**Changes in v35:** **form values are checked against the PDF's text layer** (§3.6 *Form extraction*), which is independent of
+Vision, unlike its page reading. An ambiguous date takes the one reading the text has (`09-05-2026` → `2026-09-05`), and a
+misread name takes the single closest run of words in the text (`Sam Okator` → `Sam Okafor`). Public extraction field accuracy
+0.935 → **0.984** (passes), invalid extractions 1 → 0; the one field left is `approved_by`, printed under "Manager approval"
+(not guessed from labels). Public WER (0.055) is the last failing public gate.
 ---
 
 ## 1. Scope (v1)
@@ -658,6 +664,11 @@ of scope (licenses unchecked).
   a schema hint didn't help). For `"format": "date"` fields, unambiguous dates are normalized to ISO 8601 (day/month order only when a
   part is > 12; month names understood) and then **format-checked**: an ambiguous `03/04/2026` is kept and flagged, never guessed.
 - **PDFs:** up to 4 pages (`--pages`) are extracted page by page and merged field by field (first non-null wins).
+- **Text layer (v35):** a digital PDF's own text (`documents.text_layer_lines`, the pages extracted) checks the values before
+  validation (`vision.resolve_against_text`). A `"format": "date"` value that's ambiguous takes the one day/month reading found
+  in the text (both or neither: kept and flagged). A string with letters that the text doesn't contain takes the single closest
+  run of the same number of words (similarity ≥ 0.85, no tie), so a misread name is corrected and a correct value is never
+  moved. Numbers and amounts are left alone (the nearest similar number may be another one); images and scans have no text.
 - **Sums (v33):** a schema may list arithmetic that must hold, `"x-sums": [{"total": "total", "parts": ["subtotal",
   "-discount", "service_charge", "tax"]}]` (`-` subtracts; a missing part counts as 0; a rule needs its total and one part).
   Amounts are parsed as printed (`377,859` = `377.859` = 377859; `1.234,56` = 1234.56). A sum off by more than 0.01 is an
@@ -1470,7 +1481,7 @@ Granite-Docling.
 | Unanswerable questions declined | **1.000** | ≥ 0.90 | ✅ (2 of 26 answerable questions were declined, both for the dropped values) |
 | Citation precision | 0.957 | | |
 | Guardian groundedness / answer relevance | 0.958 / 0.958 | ≥ 0.90 | informational until the judge check (below) |
-| Extraction field accuracy | 0.935 | ≥ 0.98 | ❌ 4 of 62 fields: `Sam Okator`, a missed `approved_by`, two ISO dates rewritten as `09-05-2026` (flagged invalid, never guessed) |
+| Extraction field accuracy | 0.935 | ≥ 0.98 | ❌ 4 of 62 fields: `Sam Okator`, a missed `approved_by`, two ISO dates rewritten as `09-05-2026` (flagged invalid, never guessed). **v35: 0.984 ✅** (text layer; `approved_by` left) |
 | Table cell F1 | **0.997** | ≥ 0.95 | ✅ with the empty-table fallback (Docling alone: 0.747) |
 | Action-item recall | 0.833 | ≥ 0.90 | ❌ "*I'll* post the job ads": no speaker diarization, so no owner (v31: the name was never said; the fixture now says it, 1.000) |
 | WER | 0.056 | ≤ 0.05 | ❌ vendor-review 0.112: "Northbeam" → "north beam", "Priya" → "pria"; the other two 0.018 and 0.037 |
@@ -1487,8 +1498,8 @@ were fixed in the harness instead (written amounts like `$16,500` vs spoken word
    12 / 12 controls. Scans would still need a Vision page pass.
 2. **No speaker diarization:** action items said in the first person have no owner. A v1 limitation (diarization is not in the plan's
    model set); the summary prompt could ask for "unknown" explicitly.
-3. **Vision rewrites ISO dates** into an ambiguous `MM-DD-YYYY`: validation flags it (as designed); resolving the ambiguity against
-   the page's own text would recover it.
+3. ~~**Vision rewrites ISO dates**~~ into an ambiguous `MM-DD-YYYY`: validation flags it (as designed). **Fixed in v35** for
+   digital PDFs: the ambiguity is resolved against the text layer (§3.6 *Form extraction*).
 
 #### Trusting the judge
 

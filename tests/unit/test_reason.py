@@ -248,6 +248,18 @@ def test_long_meetings_are_summarized_by_section_then_combined() -> None:
     assert llm.calls[-1][0][0]["content"] == prompts.COMBINE_SYSTEM
 
 
+def test_placeholder_owners_become_null() -> None:
+    items = [
+        {"owner": "Someone", "task": "a", "due": None},
+        {"owner": " the team ", "task": "b", "due": None},
+        {"owner": "Sam", "task": "c", "due": None},
+        {"owner": None, "task": "d", "due": None},
+    ]
+    reply = json.dumps({"summary": "s", "decisions": [], "action_items": items})
+    summary = summarize(transcript(10), ScriptedLLM([reply]), COUNTER)
+    assert [i["owner"] for i in summary.data["action_items"]] == [None, None, "Sam", None]
+
+
 def test_empty_recordings_need_no_model() -> None:
     summary = summarize(Transcript(5.0, 0.0, 0, (), ""), ScriptedLLM([]), COUNTER)
     assert summary.sections == 0 and summary.data["action_items"] == []

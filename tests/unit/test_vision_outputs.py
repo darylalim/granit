@@ -157,3 +157,70 @@ def test_extraction_json_is_storable() -> None:
     e = Extraction("form", "json", '{"a": 1}', True, data={"a": 1}, missing=("b",), page=1)
     out = json.loads(json.dumps(e.to_json()))
     assert out["kind"] == "form" and out["missing"] == ["b"] and "data" not in out
+
+
+# ── page reading (M7 private set: receipts and a scan Granite-Docling couldn't read) ──
+
+DOCLING_LOOP = "\n\n".join(["1", "2", "3"] + ["loc>loc>loc>201"] * 30)  # as stored for cord-004
+VISION_LOOP = (
+    "Here is the text from the image, transcribed line by line:\n\n```\n" + "$0.21\n" * 400
+)
+RECEIPT = "1 TAHU GORENG 28,000\n1 CAKWE 17,000\n1 PHO TAI CHIN (R) 63,000\n1 TEA 11,000\nSub Total 119,000\nGrand Total 140,063"
+
+
+@pytest.mark.parametrize("text", [DOCLING_LOOP, VISION_LOOP, " . \n" * 50, "the " * 40])
+def test_loops_are_detected(text: str) -> None:
+    assert vision.is_looping(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [RECEIPT, "short", "1 TEA\n" * 3, "| Week | Boise |\n|---|---|\n| 7 | 571 |\n| 8 | 602 |"],
+)
+def test_real_text_is_not_a_loop(text: str) -> None:
+    assert not vision.is_looping(text)
+
+
+def test_distinct_words_ignore_numbers_and_markup() -> None:
+    assert vision.distinct_words("\n".join(str(n) for n in range(200))) == 0
+    assert vision.distinct_words(DOCLING_LOOP) == 1  # "loc"
+    assert vision.distinct_words("Sub Total 119,000 Grand Total") == 3
+
+
+def test_clean_page_text_drops_the_preamble_fences_and_tags() -> None:
+    fenced = "Here is the text from the image, transcribed line by line:\n\n```\nICE BLACK COFFEE 2 82,000\n\nTOTAL  174,600\n```"
+    assert vision.clean_page_text(fenced) == ["ICE BLACK COFFEE 2 82,000", "TOTAL 174,600"]
+    assert vision.clean_page_text(
+        "<doc> 104-10003-10041 RELEASE \n . \n 7. \n Room 2593 </doc>"
+    ) == [
+        "104-10003-10041 RELEASE",
+        "7.",
+        "Room 2593",
+    ]
+
+
+class ScriptedVision(vision.VisionModel):
+    """Returns the scripted outputs in order and records each call's options."""
+
+    def __init__(self, *outputs: str) -> None:
+        super().__init__()
+        self.outputs, self.calls = list(outputs), []
+
+    def generate(self, image, prompt, max_tokens, **options):  # type: ignore[override]
+        self.calls.append(options)
+        return self.outputs.pop(0)
+
+
+def test_read_page_retries_a_loop_with_a_repetition_penalty() -> None:
+    model = ScriptedVision(VISION_LOOP, RECEIPT)
+    assert model.read_page(None)[-1] == "Grand Total 140,063"
+    assert model.calls == [{}, {"repetition_penalty": 1.1, "repetition_context_size": 64}]
+
+
+def test_read_page_gives_nothing_rather_than_a_loop() -> None:
+    assert ScriptedVision(VISION_LOOP, VISION_LOOP).read_page(None) == []
+
+
+def test_read_page_keeps_the_first_good_reading() -> None:
+    model = ScriptedVision(RECEIPT)
+    assert len(model.read_page(None)) == 6 and model.calls == [{}]

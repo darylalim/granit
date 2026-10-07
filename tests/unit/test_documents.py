@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from granit.ingest import documents
+from granit.ingest.vision import VisionModel
 from tests.conftest import ROOT
 
 FIXTURES = ROOT / "tests" / "fixtures" / "documents"
@@ -251,3 +252,122 @@ def test_images_and_scans_have_no_text_layer() -> None:
     assert (
         documents.text_layer_lines(EVAL_FILES / "invoices" / "inv-05.pdf") == {}
     )  # a scan: pictures only
+
+
+# ── the Vision page pass ──
+
+
+def receipt_as_docling_saw_it() -> Any:
+    """cord-094 as Granite-Docling read it: the whole photo as one picture, nothing else."""
+    from docling_core.types.doc import DocItemLabel, DoclingDocument, Size
+
+    doc = DoclingDocument(name="cord-094")
+    doc.add_page(page_no=1, size=Size(width=864, height=1296))
+    doc.add_picture(prov=documents._on(1, ""))
+    doc.add_text(label=DocItemLabel.PAGE_FOOTER, text="1 / 1", prov=documents._on(1, "1 / 1"))
+    return doc
+
+
+class PageReader(VisionModel):
+    """Vision that reads every page as ``lines`` and counts the pages it was asked to read."""
+
+    def __init__(self, lines: list[str]) -> None:
+        super().__init__()
+        self.lines, self.pages = lines, 0
+
+    def read_page(self, image: Any) -> list[str]:
+        self.pages += 1
+        return self.lines
+
+
+RECEIPT_LINES = ["1 PHO TAI CHIN (R) 63,000", "Sub Total 119,000", "Grand Total 140,063"]
+
+
+def test_a_page_with_little_text_needs_the_page_pass() -> None:
+    assert documents.needs_page_pass(documents.page_markdown(receipt_as_docling_saw_it(), 1))
+    words = " ".join(f"word{chr(97 + i % 26)}{chr(97 + i // 26)}" for i in range(60))
+    assert not documents.needs_page_pass(words.replace("word", "w"))
+
+
+def test_replace_page_swaps_docling_for_vision_and_cites_the_page() -> None:
+    from granit.store.chunking import chunk_document
+
+    doc = receipt_as_docling_saw_it()
+    documents.replace_page(doc, 1, RECEIPT_LINES)
+    assert not doc.pictures and "1 / 1" not in documents.page_markdown(doc, 1)
+    (chunk,) = [c for c in chunk_document(doc) if "140,063" in c.text]
+    assert chunk.page_start == 1
+    assert chunk.context.endswith(documents.VISION_PAGE_HEADING.format(page=1))
+
+
+def test_read_pages_replaces_an_unreadable_image_page() -> None:
+    ingestor = documents.DocumentIngestor(vision=PageReader(RECEIPT_LINES))
+    doc = receipt_as_docling_saw_it()
+    assert ingestor._read_pages(doc, FIXTURES / "invoice.png", {}) == 1
+    assert "Grand Total 140,063" in doc.export_to_markdown()
+
+
+def test_read_pages_keeps_docling_when_vision_reads_less() -> None:
+    ingestor = documents.DocumentIngestor(vision=PageReader([]))
+    doc = receipt_as_docling_saw_it()
+    assert ingestor._read_pages(doc, FIXTURES / "invoice.png", {}) == 0
+    assert len(doc.pictures) == 1
+
+
+def test_a_looping_page_is_cleared_even_if_vision_reads_nothing() -> None:
+    from docling_core.types.doc import DocItemLabel
+
+    doc = receipt_as_docling_saw_it()
+    for _ in range(30):
+        doc.add_text(label=DocItemLabel.TEXT, text="loc>loc>loc>201", prov=documents._on(1, "x"))
+    ingestor = documents.DocumentIngestor(vision=PageReader([]))
+    assert ingestor._read_pages(doc, FIXTURES / "invoice.png", {}) == 1
+    assert "loc>" not in doc.export_to_markdown()
+
+
+def test_digital_pages_skip_vision_but_lose_a_loop() -> None:
+    """A page with a text layer is never read by Vision; if Docling looped on it, it's cleared for the safety net."""
+    from docling_core.types.doc import DocItemLabel
+
+    reader = PageReader(RECEIPT_LINES)
+    ingestor = documents.DocumentIngestor(vision=reader)
+    doc = receipt_as_docling_saw_it()
+    assert ingestor._read_pages(doc, FIXTURES / "invoice.png", {1: ["text layer"]}) == 0
+    for _ in range(30):
+        doc.add_text(label=DocItemLabel.TEXT, text="loc>loc>loc>201", prov=documents._on(1, "x"))
+    assert ingestor._read_pages(doc, FIXTURES / "invoice.png", {1: ["text layer"]}) == 1
+    assert reader.pages == 0 and "loc>" not in doc.export_to_markdown()
+
+
+def test_items_without_provenance_go_with_the_page_before_them() -> None:
+    """cord-020: Granite-Docling's looping output ("239" ×100) had no provenance and survived a per-page delete."""
+    from docling_core.types.doc import DocItemLabel
+
+    doc = receipt_as_docling_saw_it()
+    for _ in range(30):
+        doc.add_text(label=DocItemLabel.TEXT, text="239")
+    assert documents.needs_page_pass(documents.docling_page_text(doc, 1))
+    documents.replace_page(doc, 1, RECEIPT_LINES)
+    assert not [t for t in doc.texts if t.text == "239"]
+    assert "Grand Total 140,063" in doc.export_to_markdown()
+
+
+def test_a_page_with_a_table_or_chart_keeps_doclings_reading() -> None:
+    """M7 public set: a table or chart page has few words, but Docling's structure is what the eval scores."""
+    from docling_core.types.doc import TableData
+
+    doc = receipt_as_docling_saw_it()
+    table = doc.add_table(data=TableData(num_rows=0, num_cols=0), prov=documents._on(1, "t"))
+    assert not documents.has_structure(doc, 1)  # an empty table doesn't count
+    documents.fill_table(table, [["Week", "Boise"], ["7", "571"]])
+    assert documents.has_structure(doc, 1)
+    reader = PageReader(RECEIPT_LINES)
+    assert (
+        documents.DocumentIngestor(vision=reader)._read_pages(doc, FIXTURES / "invoice.png", {})
+        == 0
+    )
+    assert reader.pages == 0
+
+    chart = receipt_as_docling_saw_it()
+    documents.attach_chart(chart.pictures[0], [["Quarter", "Revenue"], ["Q1", "120"]])
+    assert documents.has_structure(chart, 1)

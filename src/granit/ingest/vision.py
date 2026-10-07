@@ -22,7 +22,16 @@ CHART_QUESTION = (
     "Is this image a chart or graph that shows data values (bar, line, pie, scatter or area)? "
     "Answer only yes or no."
 )
-MAX_TOKENS = {"is_chart": 4, "chart": 1024, "table": 4096, "form": 2048}
+# Whole-page reading for pages Granite-Docling couldn't read (photos, scans). The model card has no tag for this; it's the
+# model's general image-to-text ability. A Markdown prompt looped on receipts, this one didn't (M7 private set).
+PAGE_PROMPT = (
+    "Read all the text in this image, line by line, top to bottom. "
+    "Output only the text, one line per line of the image."
+)
+# Greedy decoding loops on hard pages ("$0.21" ×400, " ." ×800); a retry at 1.1 reads them. Not the default: on clean
+# receipts it changes digits (325.400 → 325.600).
+PAGE_RETRY_PENALTY = 1.1
+MAX_TOKENS = {"is_chart": 4, "chart": 1024, "table": 4096, "form": 2048, "page": 1536}
 
 
 class VisionOutputError(ValueError):
@@ -152,6 +161,44 @@ def html_grid(html: str) -> list[list[str]]:
         if any(k[0] == r for k in parser.spans):  # a gap: fill and continue
             row.append("")
     return [row for row in rows if row]
+
+
+LOOP_SHARE = 0.3  # one line (or word) making up this share of the output is a loop
+LOOP_MIN_ITEMS = 10
+
+
+def is_looping(text: str) -> bool:
+    """A model stuck repeating itself: Granite-Docling's ``loc>loc>201`` lines, Vision's ``$0.21`` ×400."""
+    from collections import Counter
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    words = [
+        w for w in text.split() if any(c.isalnum() for c in w)
+    ]  # not a Markdown table's "|" and "---"
+    for items in (lines, words):
+        if len(items) >= LOOP_MIN_ITEMS:
+            _, count = Counter(items).most_common(1)[0]
+            if count / len(items) >= LOOP_SHARE:
+                return True
+    return False
+
+
+def distinct_words(text: str) -> int:
+    """Distinct words of two or more letters: how much readable text a page gave (counting lines ``1 2 3…`` give none)."""
+    return len({w.lower() for w in re.findall(r"[^\W\d_]{2,}", text)})
+
+
+_PREAMBLE = re.compile(r"^(here is|here's|below is|the text)\b.*:\s*$", re.IGNORECASE)
+
+
+def clean_page_text(text: str) -> list[str]:
+    """Vision's page reading → lines: without code fences, ``<doc>`` tags, a "Here is the text…:" preamble, or lines
+    with no letters or digits."""
+    body = re.sub(r"</?doc>", "", strip_fences(text) if "```" in text else text)
+    lines = [" ".join(line.split()) for line in body.splitlines()]
+    if lines and _PREAMBLE.match(lines[0]):
+        lines = lines[1:]
+    return [line for line in lines if any(c.isalnum() for c in line)]
 
 
 def parse_json_object(text: str) -> dict[str, Any]:
@@ -342,8 +389,9 @@ class VisionModel:
             self._model, self._processor = load(str(local_snapshot(HUB_MODELS["vision"])))
         return self
 
-    def generate(self, image: Any, prompt: str, max_tokens: int) -> str:
-        """One image + prompt → text, at temperature 0. ``image`` is a PIL image or a file path."""
+    def generate(self, image: Any, prompt: str, max_tokens: int, **options: Any) -> str:
+        """One image + prompt → text, at temperature 0. ``image`` is a PIL image or a file path; ``options`` go to
+        mlx-vlm (e.g. ``repetition_penalty``)."""
         from mlx_vlm import generate
         from mlx_vlm.prompt_utils import apply_chat_template
 
@@ -357,8 +405,21 @@ class VisionModel:
             image=[image if isinstance(image, str) else _as_rgb(image)],
             max_tokens=max_tokens,
             temperature=0.0,
+            **options,
         )
         return result.text.strip()
+
+    def read_page(self, image: Any) -> list[str]:
+        """A whole page's text, line by line; retried with a repetition penalty if the model loops. Empty if it still
+        loops, so a loop never reaches the index."""
+        for options in (
+            {},
+            {"repetition_penalty": PAGE_RETRY_PENALTY, "repetition_context_size": 64},
+        ):
+            text = self.generate(image, PAGE_PROMPT, MAX_TOKENS["page"], **options)
+            if not is_looping(text):
+                return clean_page_text(text)
+        return []
 
     def is_chart(self, image: Any) -> bool:
         answer = self.generate(image, CHART_QUESTION, MAX_TOKENS["is_chart"])

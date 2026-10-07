@@ -11,6 +11,10 @@
    and citable) and in ``document.json``.
 3. **Tables** stay as Docling extracted them unless ``DOCUMENT_VISION_TABLES`` is on; then each table crop also goes
    through ``<tables_html>`` and is stored as an extraction.
+4. **Page pass:** a page without a text layer (an image, a scan) where Granite-Docling looped or found fewer than
+   ``MIN_PAGE_WORDS`` distinct words is read again by Vision, line by line; Vision's reading replaces Docling's if it
+   found more. A looping page is cleared either way, so a loop never reaches the index. Digital pages are covered by
+   the **text-layer safety net** instead, which adds back lines Docling dropped.
 
 Outputs land in ``<out_dir>/``: ``document.json``, ``document.md`` and ``crops/p<page>_<kind><n>.png`` (the regions sent
 to Vision), matching ``data/derived/<source_id>/`` in PLAN.md §2.3.
@@ -163,12 +167,9 @@ def _tokens(text: str) -> list[str]:
 def missing_lines(doc: Any, lines_by_page: dict[int, list[str]]) -> dict[int, list[str]]:
     """Text-layer lines whose content Docling didn't capture on that page, compared as canonical tokens (``$9,360.00`` =
     ``9360``, any date format = ISO). Headers and footers count as captured, so they aren't recovered as noise."""
-    from docling_core.types.doc import ContentLayer
-
     out = {}
     for page, lines in lines_by_page.items():
-        markdown = doc.export_to_markdown(page_no=page, included_content_layers=set(ContentLayer))
-        captured = set(_tokens(markdown))
+        captured = set(_tokens(page_markdown(doc, page)))
         missing = []
         for line in lines:
             tokens = _tokens(line)
@@ -181,25 +182,109 @@ def missing_lines(doc: Any, lines_by_page: dict[int, list[str]]) -> dict[int, li
     return out
 
 
+def _on(page: int, text: str) -> Any:
+    """Provenance for text we add: the whole page (no box), so chunks cite the right page."""
+    from docling_core.types.doc import BoundingBox, ProvenanceItem
+
+    return ProvenanceItem(
+        page_no=page, bbox=BoundingBox(l=0, t=0, r=1, b=1), charspan=(0, len(text))
+    )
+
+
+def add_lines(doc: Any, page: int, heading: str, lines: list[str]) -> int:
+    """Append lines under a top-level heading (not under the last heading), with that page's provenance."""
+    from docling_core.types.doc import DocItemLabel
+
+    doc.add_heading(heading, level=1, prov=_on(page, heading))
+    for line in lines:
+        doc.add_text(label=DocItemLabel.TEXT, text=line, prov=_on(page, line))
+    return len(lines)
+
+
 def add_text_layer_lines(doc: Any, missing: dict[int, list[str]]) -> int:
-    """Append the missing lines under one heading per page, with that page's provenance (so chunks cite the right page)."""
-    from docling_core.types.doc import BoundingBox, DocItemLabel, ProvenanceItem
+    """Append the missing lines under one heading per page."""
+    return sum(
+        add_lines(doc, page, TEXT_LAYER_HEADING.format(page=page), lines)
+        for page, lines in sorted(missing.items())
+    )
 
-    def on(page: int, text: str) -> Any:
-        return ProvenanceItem(
-            page_no=page, bbox=BoundingBox(l=0, t=0, r=1, b=1), charspan=(0, len(text))
-        )
 
-    added = 0
-    for page, lines in sorted(missing.items()):
-        heading = TEXT_LAYER_HEADING.format(page=page)
-        doc.add_heading(
-            heading, level=1, prov=on(page, heading)
-        )  # top level: not under the last heading
-        for line in lines:
-            doc.add_text(label=DocItemLabel.TEXT, text=line, prov=on(page, line))
-            added += 1
-    return added
+# ── the Vision page pass (M7 private set: Granite-Docling looped or read nothing on receipt photos and a scan) ──
+
+VISION_PAGE_HEADING = "Text read from the page image by Granite Vision (page {page})"
+MIN_PAGE_WORDS = (
+    40  # distinct words: below this, a page without a text layer is read again by Vision
+)
+PAGE_SCALE = 2.0  # PDF render scale for page reading (tested at 2×; images are used as they are)
+
+
+def page_markdown(doc: Any, page: int) -> str:
+    from docling_core.types.doc import ContentLayer
+
+    return doc.export_to_markdown(page_no=page, included_content_layers=set(ContentLayer))
+
+
+def page_items(doc: Any, page: int) -> list[Any]:
+    """Items on ``page`` only. An item without provenance (Granite-Docling's looping output has none) belongs to the
+    page of the item before it in reading order, so it's found and removed with its page."""
+    from docling_core.types.doc import ContentLayer
+
+    current, out = min(doc.pages, default=1), []
+    for item, _ in doc.iterate_items(
+        included_content_layers=set(ContentLayer), traverse_pictures=True
+    ):
+        pages = {p.page_no for p in getattr(item, "prov", None) or []}
+        if len(pages) > 1:  # spans pages: never removed with one of them
+            current = max(pages)
+            continue
+        current = pages.pop() if pages else current
+        if current == page:
+            out.append(item)
+    return out
+
+
+def docling_page_text(doc: Any, page: int) -> str:
+    """The page's Markdown plus the text of its items without provenance (which a per-page export leaves out)."""
+    unplaced = [getattr(i, "text", "") for i in page_items(doc, page) if not i.prov]
+    return "\n".join([page_markdown(doc, page), *unplaced])
+
+
+def needs_page_pass(text: str) -> bool:
+    """Docling's reading of a page looped, or found too little text to be the whole page."""
+    from granit.ingest.vision import distinct_words, is_looping
+
+    return is_looping(text) or distinct_words(text) < MIN_PAGE_WORDS
+
+
+def has_structure(doc: Any, page: int) -> bool:
+    """The page has a table with cells or a chart with data: a page of numbers with few words that Docling read well
+    (M7 public set: the table fixtures and the chart report)."""
+    from docling_core.types.doc import PictureItem, TableItem
+
+    for item in page_items(doc, page):
+        if isinstance(item, TableItem) and not is_empty_table(item):
+            return True
+        if isinstance(item, PictureItem) and item.meta and item.meta.tabular_chart:
+            return True
+    return False
+
+
+def replace_page(doc: Any, page: int, lines: list[str]) -> None:
+    """Delete everything Docling found on ``page`` (text, tables, pictures, headers) and add ``lines`` in its place."""
+    items = page_items(doc, page)
+    refs = {item.self_ref for item in items}
+
+    def inside_another(item: Any) -> bool:  # deleting a parent deletes its children
+        parent = item.parent
+        while parent is not None:
+            if parent.cref in refs:
+                return True
+            parent = parent.resolve(doc).parent
+        return False
+
+    doc.delete_items(node_items=[item for item in items if not inside_another(item)])
+    if lines:
+        add_lines(doc, page, VISION_PAGE_HEADING.format(page=page), lines)
 
 
 def is_large_enough(item: Any, minimum: float = MIN_PICTURE_SIZE) -> bool:
@@ -289,6 +374,8 @@ class DocumentResult:
     tables_from_vision: int = 0
     # lines Docling missed, added back from the PDF's own text layer
     text_layer_lines: int = 0
+    # pages without a text layer that Docling couldn't read, read again by Vision (or cleared, if Docling looped)
+    pages_from_vision: int = 0
     seconds: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> dict[str, Any]:
@@ -297,6 +384,7 @@ class DocumentResult:
             "tables": self.tables,
             "tables_from_vision": self.tables_from_vision,
             "text_layer_lines": self.text_layer_lines,
+            "pages_from_vision": self.pages_from_vision,
             "pictures": self.pictures,
             "charts": self.charts,
             "extractions": len(self.extractions),
@@ -392,8 +480,14 @@ class DocumentIngestor:
         finally:
             pages.close()
 
+        # after charts and tables, so a page whose few words sit in a table or chart keeps Docling's structure
+        lines_by_page = text_layer_lines(path)
         start = time.perf_counter()
-        text_layer = add_text_layer_lines(doc, missing_lines(doc, text_layer_lines(path)))
+        pages_from_vision = self._read_pages(doc, path, lines_by_page)
+        seconds["pages"] = round(time.perf_counter() - start, 2)
+
+        start = time.perf_counter()
+        text_layer = add_text_layer_lines(doc, missing_lines(doc, lines_by_page))
         seconds["text_layer"] = round(time.perf_counter() - start, 3)
 
         drop_images(
@@ -413,8 +507,39 @@ class DocumentIngestor:
             tables=len(doc.tables),
             tables_from_vision=tables_from_vision,
             text_layer_lines=text_layer,
+            pages_from_vision=pages_from_vision,
             seconds=seconds,
         )
+
+    def _read_pages(self, doc: Any, path: Path, lines_by_page: dict[int, list[str]]) -> int:
+        """The Vision page pass; returns the pages replaced. A digital page Docling looped on is only cleared: the
+        text-layer safety net then adds back all of its text."""
+        from granit.ingest.vision import distinct_words, is_looping
+
+        replaced = 0
+        images = PageImages(path, PAGE_SCALE)
+        try:
+            for page in sorted(doc.pages):
+                markdown = docling_page_text(doc, page)
+                if page in lines_by_page:
+                    if is_looping(markdown):
+                        replace_page(doc, page, [])
+                        replaced += 1
+                    continue
+                if not is_looping(markdown) and (
+                    has_structure(doc, page) or not needs_page_pass(markdown)
+                ):
+                    continue
+                lines = self.vision.read_page(images.page(page))
+                # Vision's reading wins if it found more; a looping Docling page goes either way
+                if is_looping(markdown) or distinct_words("\n".join(lines)) > distinct_words(
+                    markdown
+                ):
+                    replace_page(doc, page, lines)
+                    replaced += 1
+        finally:
+            images.close()
+        return replaced
 
     def _charts(
         self, doc: Any, pages: PageImages, crops: Path, out_dir: Path

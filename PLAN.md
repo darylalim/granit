@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v28 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v29 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v28: M0–M7 done; text-layer safety net + document titles in chunk context (public fact coverage 0.885 → 0.962); private set and the 50 hand labels pending.** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v29: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans (private fact coverage 0.648 → 0.741). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -106,6 +106,12 @@ wrong answers; Guardian caught 12 / 12 on the public set.
 digital PDFs, and **every chunk's context now starts with its document's title**, because Docling marks every heading level 1 and
 chunks lost which document they were from. Public set: fact coverage 0.885 → **0.962**, false declines 7.7 % → **0 %**, text-layer
 words missing from the chunks 1.3 % → 0.5 %; vector MRR@8 0.859 → 0.919.
+
+**Changes in v29:** the **private set** is built from real published content (`scripts/fetch_real_eval.py`: 5 US federal PDFs, a 1964
+scan, 5 receipt photos, 2 AMI meetings, 31 questions; all sha-pinned) and its first run triaged (§4.9 *Private set*). Its biggest
+finding is fixed: Granite-Docling **looped or read nothing** on receipt photos and the scan, putting junk (`loc>loc>201` ×100) or nothing
+in the index. A **Vision page pass** (§3.6 item 6) reads such pages again, and a **loop check** keeps looping output out of the index.
+Private set: fact coverage 0.648 → **0.741**, retrieval recall@8 0.889 → **1.000**; public set unchanged (tables 0.997, facts 0.962).
 ---
 
 ## 1. Scope (v1)
@@ -583,7 +589,20 @@ of scope (licenses unchecked).
    **Chunks also say which document they're from:** Docling marks every heading level 1, so a chunk kept only its nearest heading
    ("Invoice") and lost the vendor; every chunk's context now starts with the document's first heading
    ("Cedar & Pine Catering > Invoice").
-6. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
+6. **Vision page pass (v29).** On the private set Granite-Docling **looped** on receipt photos (counting `1 2 3 … 242`, or
+   `loc>loc>loc>201` lines, with no provenance), took a whole receipt for one picture (stored as the word "Other"), and read only the
+   header of a typewritten scan. A page **without a text layer** is read again by Granite Vision when Docling's reading of it
+   **loops** (one line or word ≥ 30 % of the output) or has **fewer than 40 distinct words**, unless the page has a filled table or a
+   chart with data (a table page has few words, and Docling's structure is what §4.9 scores: tables stayed 0.997). Vision's reading
+   (prompt *"Read all the text in this image, line by line…"*; the model card has no tag for it) replaces everything Docling put on
+   the page if it found more distinct words, under *"Text read from the page image by Granite Vision (page N)"*. Vision loops too
+   (`$0.21` ×400 on one receipt): a looping reading is **retried with a repetition penalty of 1.1**, which isn't the default because
+   it changes digits on clean receipts (325.400 → 325.600); a reading that still loops is dropped. A **looping page is cleared
+   either way**, and a digital page Docling looped on is cleared and refilled by the text-layer safety net. Docling's items without
+   provenance belong to the page before them in reading order. Cost: 3–6 s per receipt, ~45 s for a looping page (both attempts).
+   Measured: 5 / 5 receipts read with every amount right (cord-004, crumpled, also picks up handwriting behind it); the scan's
+   subject, sender, recipients and comments, but not its date stamp.
+7. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
    valid, errors, page, crop, model + revision), ready for the `extractions` table (M4).
 
 **Form extraction (`VisionModel.extract_fields`, `granit extract FILE --schema S.json`)**
@@ -1447,6 +1466,33 @@ a transcript's later line), so the person said "not supported" and Guardian, see
 sources whole, so the true agreement is at least 0.92. The other 2: a correct answer whose reasoning narration was judged
 unsupported, and a planted "12 %" (source: 9 %) labeled supported. Repeat after any Guardian or prompt change.
 
+#### Private set (2026-10-06, real published content)
+
+Built by `scripts/fetch_real_eval.py` into `data/eval/` (never committed): 5 US federal PDFs (Fed projections, FOMC minutes, two Census
+releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD receipt photos (Indonesian amounts), 2 AMI meetings
+(~35 min each, four speakers, room mix) and 31 questions whose references were written by others (AMI annotators, CORD labelers).
+
+| Metric | First run | v29 | Pass at | Cause of the remaining gap |
+|---|---|---|---|---|
+| Retrieval recall@8 | 0.889 | **1.000** | ≥ 0.85 | ✅ (BM25 0.852 → vectors 0.833 → hybrid 0.870 → + rerank 0.889 in the first run) |
+| Fact coverage | 0.648 | 0.741 | ≥ 0.85 | ❌ tables (below); the scan's date stamp; spoken numbers |
+| Unanswerable declined | 1.000 | 1.000 | ≥ 0.80 | ✅ |
+| Guardian groundedness | 1.000 | 1.000 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
+| Extraction field accuracy | 0.857 | 0.857 | ≥ 0.95 | ❌ cord-020's `.` thousands separator (4 fields), cord-004 subtotal |
+| Action-item recall | 0.283 | 0.283 | ≥ 0.80 | ❌ not yet triaged: diarization and/or matching terse annotator items |
+| WER | 0.178 | 0.178 | ≤ 0.10 | ❌ AMI room mix; number formatting (`110 clock`, `€1212.5` for a stuttered "twelve fifty") |
+
+**Triaged causes (read from the stored chunks and answers):**
+1. ~~**Docling on photos and scans:** loops or nothing~~ **Fixed in v29** (§3.6 item 6): both receipt questions now answered;
+   the scan questions 0 / 2 → 0.5 / 2 (its date stamp is still missed).
+2. **Merged table headers:** the Fed projections table has a two-row header; Docling flattened it (`Median 1 | Median 1 | …`, years
+   lost), so 3 questions read the wrong column (the range 3.7–4.3 instead of the central tendency 3.9–4.3; 4.9 instead of 4.6) or
+   declined. The §4.9 *Tables* rule asks for Vision on such tables when the private set shows it winning.
+3. **Table captions missing from chunk context:** the Census release's seasonally adjusted and not-adjusted tables are identical
+   chunks; the answer took 283,293 (adjusted) for 322,862 (not adjusted).
+4. **Spoken numbers:** TurboCTC's number formatting turns "eleven o'clock" into `110 clock` and a stuttered "twelve… twelve fifty"
+   into `€1212.5`.
+
 #### Running and comparing
 
 - `granit eval run --set public|private [--retrieval bm25|vectors|hybrid|hybrid+rerank]` runs through the phase manager:
@@ -1566,7 +1612,7 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | The mlx-vlm Vision port could differ from the reference Transformers output (DeepStack injection) | Golden tests against the card's example outputs; compare one sample with Transformers on MPS if needed |
 | Chart detection misses a chart (Vision answers "no") or charts a photo | Yes/no check measured on the card's chart and logo; misses leave the image as a placeholder (no wrong data); M7 public set adds charts of several types |
 | Vision rewrites field values (dates seen in M3) | `format: date` normalization + format check; ambiguous dates flagged, never guessed; M7 field accuracy |
-| Granite-Docling silently drops content (M7: empty tables in 6 of 21; field values on one invoice layout) | Empty tables → Vision at ingest (M7); digital PDFs: text-layer safety net (v28, 0.5 % of words still uncaptured on the public set); scans: no text layer, a Vision page pass if the private set shows losses |
+| Granite-Docling silently drops content (M7: empty tables in 6 of 21; field values on one invoice layout) | Empty tables → Vision at ingest (M7); digital PDFs: text-layer safety net (v28, 0.5 % of words still uncaptured on the public set); scans and photos: Vision page pass (v29) when Docling loops or reads < 40 distinct words; looping output never indexed |
 | Tight transformers version window (≥ 5.16, Docling excludes some 5.x) | Commit `uv.lock`; upgrade deliberately |
 | MLX in Streamlit threads | Models only in the worker process / `mlx_lm.server` (by design) |
 | Thinking mode slows answers | **`reasoning_effort: "low"` by default (confirmed in M5)**; per-question toggle in the UI. On a 3K-token RAG prompt: off **rambled to the token limit** (32 s), low gave a short answer in 11 s, full thinking used its whole budget without answering. On the fixture library, low answers in 2–5 s. Known: on some questions low still narrates its reasoning in the answer ("…So answer: 145"); M7's answer checks track it |
@@ -1619,7 +1665,7 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Memory strategy | **Phase switching**: ingest (A: Speech + Docling + Vision bf16, 15.6 GB measured), Q&A (B: 8B q8, **16K context cap**; ~15 GB for RAG, 19.3 GB at the cap, with the 2 GB prompt-cache cap + 1 GB MLX cache limit) and verify (C, v1.1: Guardian q8, 12.4 GB) take turns, under the 26.8 GB GPU limit (§3.3) |
 | LLM context | **16K tokens per request** (prompt ≤ 14,336 + output ≤ 2,048), enforced by the M5 prompt builder; meetings over ~1 hour summarized in sections; fallback `--kv-bits 8` at 32K if M7 shows sectioned summaries miss things |
 | Audio | Decode: miniaudio (WAV/FLAC/MP3/Ogg) + macOS `afconvert` (M4A/AAC/AIFF/CAF), no ffmpeg; **Silero VAD v6 (MIT, via mlx-audio)** splits at pauses into ≤ 30 s chunks; TurboCTC per chunk; timestamped segments |
-| Documents | Granite-Docling via Docling (pypdfium2 page rendering) → Markdown + `document.json`; pictures ≥ 72 pt → Vision yes/no chart check → `<chart2csv>` into `meta.tabular_chart`; tables from Docling unless `DOCUMENT_VISION_TABLES` (per-upload "Accurate tables"), **with Vision for any table Docling leaves empty (M7)**; decided in M7: Docling by default, revisit if the private set shows Vision winning on transcribed tables (§4.9); forms: VAREX prompt + JSON Schema, dates → ISO 8601 (§3.6) |
+| Documents | Granite-Docling via Docling (pypdfium2 page rendering) → Markdown + `document.json`; pictures ≥ 72 pt → Vision yes/no chart check → `<chart2csv>` into `meta.tabular_chart`; tables from Docling unless `DOCUMENT_VISION_TABLES` (per-upload "Accurate tables"), **with Vision for any table Docling leaves empty (M7)**; decided in M7: Docling by default, revisit if the private set shows Vision winning on transcribed tables (§4.9); **pages without a text layer that Docling loops on or barely reads → Vision page pass (v29, §3.6)**; forms: VAREX prompt + JSON Schema, dates → ISO 8601 (§3.6) |
 | Search | **Hybrid + rerank**: SQLite FTS5 BM25 + Granite Embedding English R2 vectors (fp16 matrix on MPS, 1 ms at 150K) → RRF → Granite Reranker English R2 (555 ms for 30 pairs) → top-8; ≈ 90 ms per question on the fixture library (M4) |
 | Storage | **SQLite** (WAL, one transaction per job, versioned schema) + FTS5 over normalized `search_text` (IDs kept whole, words split from punctuation) + trigram ID index + float16 vectors on MPS (sqlite-vec later); files on disk by sha256. Postgres + pgvector only if multi-user |
 | Verification | **Granite Guardian 4.1 8B (local MLX q8)**: M7 evaluation in v1; batch verify job (Phase C) in v1.1; never loaded with the Q&A LLM; no-think; `yes_means` per criterion |
@@ -1633,4 +1679,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Claude Code hooks | H1 format/lint after edits · H2 protected paths · H3 command guards (uv only, no `turboctc-nc`, no GPU-limit tuning) · H4 one phase at a time · H5 quality gate on Stop · H6 session context; shared via `.claude/settings.json` |
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
-| Next step | Your private eval set + 50 Guardian labels (`granit eval init/label/agreement`); then the open M7 findings it confirms (diarization, Vision date ambiguity) before 1.0 |
+| Next step | The private set's remaining causes (§4.9 *Private set*): merged table headers (Vision for such tables), table captions in chunk context, then spoken numbers and action items; 1.0 when both sets pass |

@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v29 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v30 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v29: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans (private fact coverage 0.648 → 0.741). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v30: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -112,6 +112,12 @@ scan, 5 receipt photos, 2 AMI meetings, 31 questions; all sha-pinned) and its fi
 finding is fixed: Granite-Docling **looped or read nothing** on receipt photos and the scan, putting junk (`loc>loc>201` ×100) or nothing
 in the index. A **Vision page pass** (§3.6 item 6) reads such pages again, and a **loop check** keeps looping output out of the index.
 Private set: fact coverage 0.648 → **0.741**, retrieval recall@8 0.889 → **1.000**; public set unchanged (tables 0.997, facts 0.962).
+
+**Changes in v30:** the private set's second finding is fixed. Docling kept the Fed projections table's **two-row header**, but
+Markdown has one header row, so the chunks repeated `Median 1` ×4 and lost the years. **Multi-level headers are merged** into one
+row (`Median 1 / 2024`, §3.6 item 7), and **captioned tables are chunked as tables** (caption + header repeated in every piece)
+instead of as sentences. Private set: fact coverage 0.759 → **0.796**; public set unchanged (no change of 2 points or more).
+Action-item recall (0.283) is triaged (§4.9 *Private set*, item 5).
 ---
 
 ## 1. Scope (v1)
@@ -602,7 +608,13 @@ of scope (licenses unchecked).
    provenance belong to the page before them in reading order. Cost: 3–6 s per receipt, ~45 s for a looping page (both attempts).
    Measured: 5 / 5 receipts read with every amount right (cord-004, crumpled, also picks up handwriting behind it); the scan's
    subject, sender, recipients and comments, but not its date stamp.
-7. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
+7. **Merged table headers (v30).** A table's leading header rows with spanning cells are merged with the leaf header row into one
+   (`Median 1` over `2024` → `Median 1 / 2024`): from Docling's cell spans, or from Vision's HTML (`colspan` rows). A caption next to
+   a table no longer turns the pair into plain text: the table is split by rows, and every piece repeats the caption and the header.
+   Spaced numeric ranges keep their dash in the search text (`3.9 – 4.3`). Fixed: the year columns (cross-01) and the central
+   tendency range (doc-03). Not fixed: Docling **shifted the row labels** of one block (March values under the *Memo* row), so
+   doc-02 still reads the wrong row: a partly wrong table that no header rule catches.
+8. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
    valid, errors, page, crop, model + revision), ready for the `extractions` table (M4).
 
 **Form extraction (`VisionModel.extract_fields`, `granit extract FILE --schema S.json`)**
@@ -1472,26 +1484,36 @@ Built by `scripts/fetch_real_eval.py` into `data/eval/` (never committed): 5 US 
 releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD receipt photos (Indonesian amounts), 2 AMI meetings
 (~35 min each, four speakers, room mix) and 31 questions whose references were written by others (AMI annotators, CORD labelers).
 
-| Metric | First run | v29 | Pass at | Cause of the remaining gap |
-|---|---|---|---|---|
-| Retrieval recall@8 | 0.889 | **1.000** | ≥ 0.85 | ✅ (BM25 0.852 → vectors 0.833 → hybrid 0.870 → + rerank 0.889 in the first run) |
-| Fact coverage | 0.648 | 0.741 | ≥ 0.85 | ❌ tables (below); the scan's date stamp; spoken numbers |
-| Unanswerable declined | 1.000 | 1.000 | ≥ 0.80 | ✅ |
-| Guardian groundedness | 1.000 | 1.000 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
-| Extraction field accuracy | 0.857 | 0.857 | ≥ 0.95 | ❌ cord-020's `.` thousands separator (4 fields), cord-004 subtotal |
-| Action-item recall | 0.283 | 0.283 | ≥ 0.80 | ❌ not yet triaged: diarization and/or matching terse annotator items |
-| WER | 0.178 | 0.178 | ≤ 0.10 | ❌ AMI room mix; number formatting (`110 clock`, `€1212.5` for a stuttered "twelve fifty") |
+| Metric | First run | v29 | v30 | Pass at | Cause of the remaining gap |
+|---|---|---|---|---|---|
+| Retrieval recall@8 | 0.889 | **1.000** | **1.000** | ≥ 0.85 | ✅ (BM25 0.852 → vectors 0.833 → hybrid 0.870 → + rerank 0.889 in the first run) |
+| Fact coverage | 0.648 | 0.741 | 0.796 | ≥ 0.85 | ❌ tables (items 2–3 below); the scan's date stamp; spoken numbers |
+| Unanswerable declined | 1.000 | 1.000 | 1.000 | ≥ 0.80 | ✅ |
+| Guardian groundedness | 1.000 | 1.000 | 0.962 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
+| Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ cord-020's `.` thousands separator (4 fields), cord-004 subtotal |
+| Action-item recall | 0.283 | 0.283 | 0.283 | ≥ 0.80 | ❌ item 5 below: role owners without diarization, matching, and real misses |
+| WER | 0.178 | 0.178 | 0.178 | ≤ 0.10 | ❌ AMI room mix; number formatting (`110 clock`, `€1212.5` for a stuttered "twelve fifty") |
 
 **Triaged causes (read from the stored chunks and answers):**
 1. ~~**Docling on photos and scans:** loops or nothing~~ **Fixed in v29** (§3.6 item 6): both receipt questions now answered;
    the scan questions 0 / 2 → 0.5 / 2 (its date stamp is still missed).
-2. **Merged table headers:** the Fed projections table has a two-row header; Docling flattened it (`Median 1 | Median 1 | …`, years
-   lost), so 3 questions read the wrong column (the range 3.7–4.3 instead of the central tendency 3.9–4.3; 4.9 instead of 4.6) or
+2. ~~**Merged table headers:**~~ **Fixed in v30** (§3.6 item 7), except doc-02 (shifted row labels). The Fed projections table has
+   a two-row header; Docling kept both rows, but Markdown has one header row, so split chunks repeated `Median 1 | Median 1 | …`
+   (years lost) and 3 questions read the wrong column (the range 3.7–4.3 instead of the central tendency 3.9–4.3; 4.9 instead of 4.6) or
    declined. The §4.9 *Tables* rule asks for Vision on such tables when the private set shows it winning.
 3. **Table captions missing from chunk context:** the Census release's seasonally adjusted and not-adjusted tables are identical
-   chunks; the answer took 283,293 (adjusted) for 322,862 (not adjusted).
+   chunks; the answer took 283,293 (adjusted) for 322,862 (not adjusted). v30 finding: the label is not a caption but a section
+   row inside the table (`Adjusted` / `Not adjusted`, one cell spanning every column); the question now declines.
 4. **Spoken numbers:** TurboCTC's number formatting turns "eleven o'clock" into `110 clock` and a stuttered "twelve… twelve fifty"
    into `€1212.5`.
+5. **Action items (v30 triage, 3 of 11 matched):** the AMI references name **roles** as owners ("Project Manager") for 6 of 11
+   items, which the annotators knew from the corpus metadata; with no speaker labels the summary gives `null` or a first name, so
+   2 items with the right task still miss on the owner. Ignoring owners, recall is 0.467, so most of the gap is real: one
+   person's task merged into another's (the interface concept under *industrial design*), a role read as an owner (*market trend
+   watcher*), the next-meeting time missed, two "poll others" items folded into one. The keyword matcher is also strict: its
+   stemmer doesn't map `splitting` → `split` or `arrangement` → `arrang`. The summary also writes `someone` for unnamed owners
+   (the prompt asks for `null`). Candidate fixes, not yet chosen: matcher stemming and role owners met by a `null` owner when the
+   transcript has no speaker labels (measurement; a reason in the PR), the summary prompt, speaker diarization.
 
 #### Running and comparing
 

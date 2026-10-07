@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v33 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v34 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v33: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v34: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -144,6 +144,13 @@ the same prompt scored 0.467 or 0.383 by run order. Compare prompts each in a fr
 cord-020), and a 2× / 3× upscale doesn't fix them reliably. A schema can now declare **sums** (`x-sums`, §3.6 *Form
 extraction*); a sum that doesn't add up marks the extraction invalid with the reason, instead of returning misread amounts as
 valid. Field accuracy is unchanged (0.857): the remaining gap is the model's reading.
+
+**Changes in v34:** private WER triaged (§4.9 *Private set*, item 4). Number formatting is ~1.5 % of the reference words; the
+gap is **dropped words** (659 of 928 errors on ES2008b, 1,027 of 1,307 on IB4003), in runs inside speech segments where
+speakers overlap or backchannel (VAD keeps 72–89 % of the audio, no long gaps). One formatting bug is fixed at the word level:
+TurboCTC glues "o'clock" to the hour as a 0 (`20 clock`, `110 clock`); `audio.fix_oclock` splits an hour 1–12 + `0` before
+"clock" back into `2 o'clock`, timestamps shared. WER 0.178 → 0.178; mtg-01's transcript now says "2 o'clock", but the answer
+takes the first time proposed (11) over the one agreed (2): a Q&A finding, not ASR.
 ---
 
 ## 1. Scope (v1)
@@ -1524,7 +1531,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 | Guardian groundedness | 1.000 | 1.000 | 0.962 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
 | Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ item 6 below: Vision misreads digits on faint print (both receipts now flagged invalid by `x-sums`) |
 | Action-item recall | 0.283 | 0.283 | 0.283 | ≥ 0.80 | ❌ item 5 below; v31 scoring fix 0.383, v32 summary prompt **0.467** |
-| WER | 0.178 | 0.178 | 0.178 | ≤ 0.10 | ❌ AMI room mix; number formatting (`110 clock`, `€1212.5` for a stuttered "twelve fifty") |
+| WER | 0.178 | 0.178 | 0.178 | ≤ 0.10 | ❌ item 4 below: dropped words in overlapping speech (number formatting ≈ 1.5 % of words) |
 
 **Triaged causes (read from the stored chunks and answers):**
 1. ~~**Docling on photos and scans:** loops or nothing~~ **Fixed in v29** (§3.6 item 6): both receipt questions now answered;
@@ -1536,8 +1543,13 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 3. **Table captions missing from chunk context:** the Census release's seasonally adjusted and not-adjusted tables are identical
    chunks; the answer took 283,293 (adjusted) for 322,862 (not adjusted). v30 finding: the label is not a caption but a section
    row inside the table (`Adjusted` / `Not adjusted`, one cell spanning every column); the question now declines.
-4. **Spoken numbers:** TurboCTC's number formatting turns "eleven o'clock" into `110 clock` and a stuttered "twelve… twelve fifty"
-   into `€1212.5`.
+4. **Spoken numbers and WER (v34 triage):** TurboCTC's number formatting turned "eleven o'clock" into `110 clock` (~~fixed in
+   v34~~, `audio.fix_oclock`) and merges adjacent or repeated numbers: a stuttered "twelve… twelve fifty" → `€1212.5`, "12 13"
+   → `1213`, "3 3" → `33` (not fixed: `1213` can be a real number). Scoring gaps (`first` / `1st`, a lone `hundred` / `100`)
+   are worth 0.001. Most of the WER is **dropped words** where the four speakers overlap or backchannel: the reference
+   interleaves every speaker, one CTC stream can't. Reaching ≤ 0.10 needs a stronger speech model, not formatting fixes.
+   mtg-01 (v34): the transcript says "2 o'clock", the answer still gives the first proposal (11): answers should prefer what
+   was finally agreed.
 5. **Action items (v30 triage, 3 of 11 matched):** the AMI references name **roles** as owners ("Project Manager") for 6 of 11
    items, which the annotators knew from the corpus metadata; with no speaker labels the summary gives `null` or a first name, so
    2 items with the right task still miss on the owner. Ignoring owners, recall is 0.467, so most of the gap is real: one

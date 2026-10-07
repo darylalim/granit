@@ -224,3 +224,30 @@ def test_read_page_gives_nothing_rather_than_a_loop() -> None:
 def test_read_page_keeps_the_first_good_reading() -> None:
     model = ScriptedVision(RECEIPT)
     assert len(model.read_page(None)) == 6 and model.calls == [{}]
+
+
+@pytest.mark.parametrize(
+    ("html", "depth"),
+    [
+        ("<table><tr><th>Region</th><th>Q1</th></tr><tr><td>North</td><td>1</td></tr></table>", 0),
+        (
+            "<table><tr><th rowspan=2>Region</th><th colspan=2>2025</th></tr><tr><th>H1</th><th>H2</th></tr>"
+            "<tr><td>North</td><td>1</td><td>2</td></tr></table>",
+            2,
+        ),
+        (
+            "<table><tr><td></td><td colspan=2>2022</td></tr><tr><td>State</td><td colspan=2>Number</td></tr>"
+            "<tr><td></td><td>Estimate</td><td>Margin</td></tr><tr><td>Ohio</td><td>1</td><td>2</td></tr></table>",
+            3,
+        ),
+        # a spanning totals row at the bottom isn't a header
+        (
+            "<table><tr><th>Item</th><th>Qty</th><th>Amount</th></tr><tr><td colspan=2>Total</td><td>9</td></tr></table>",
+            0,
+        ),
+        # all header, no body: nothing to merge into
+        ("<table><tr><th colspan=2>2025</th></tr><tr><th>H1</th><th>H2</th></tr></table>", 0),
+    ],
+)
+def test_html_header_depth(html: str, depth: int) -> None:
+    assert vision.html_header_depth(html) == depth

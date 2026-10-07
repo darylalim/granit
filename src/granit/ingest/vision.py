@@ -100,6 +100,7 @@ class _Grid(HTMLParser):
         super().__init__()
         self.rows: list[list[str]] = []
         self.spans: dict[tuple[int, int], str] = {}  # (row, col) filled by a rowspan from above
+        self.spanning: set[int] = set()  # rows with a cell spanning columns
         self._cell: list[str] | None = None
         self._span = (1, 1)
 
@@ -121,6 +122,8 @@ class _Grid(HTMLParser):
             r = len(self.rows) - 1
             row = self.rows[r]
             rowspan, colspan = self._span
+            if colspan > 1:
+                self.spanning.add(r)
             for _ in range(colspan):
                 while (r, len(row)) in self.spans:
                     row.append(self.spans.pop((r, len(row))))
@@ -161,6 +164,21 @@ def html_grid(html: str) -> list[list[str]]:
         if any(k[0] == r for k in parser.spans):  # a gap: fill and continue
             row.append("")
     return [row for row in rows if row]
+
+
+def header_depth(spanning: set[int], num_rows: int) -> int:
+    """The rows of a multi-level column header: the leading rows with a cell spanning columns ("Median" over four
+    years), plus the row of column names under them. 0 for an ordinary one-row header, or if no body row is left."""
+    depth = 0
+    while depth in spanning:
+        depth += 1
+    return depth + 1 if depth and depth + 1 < num_rows else 0
+
+
+def html_header_depth(html: str) -> int:
+    parser = _Grid()
+    parser.feed(html)
+    return header_depth(parser.spanning, len(parser.rows))
 
 
 LOOP_SHARE = 0.3  # one line (or word) making up this share of the output is a loop

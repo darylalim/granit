@@ -10,7 +10,9 @@
    ``meta.tabular_chart``, so it appears as a table right under the chart in the Markdown (searchable
    and citable) and in ``document.json``.
 3. **Tables** stay as Docling extracted them unless ``DOCUMENT_VISION_TABLES`` is on; then each table crop also goes
-   through ``<tables_html>`` and is stored as an extraction.
+   through ``<tables_html>`` and is stored as an extraction. A **multi-level column header** ("Median" spanning four
+   years) is merged into one row ("Median 1 / 2024"): Markdown has one header row, and a table split into chunks
+   repeats only that row, so the years would be lost from every part but the first (v30, private set).
 4. **Page pass:** a page without a text layer (an image, a scan) where Granite-Docling looped or found fewer than
    ``MIN_PAGE_WORDS`` distinct words is read again by Vision, line by line; Vision's reading replaces Docling's if it
    found more. A looping page is cleared either way, so a loop never reaches the index. Digital pages are covered by
@@ -125,6 +127,49 @@ def fill_table(table: Any, rows: list[list[str]]) -> None:
         for c, value in enumerate(row)
     ]
     table.data = TableData(num_rows=len(rows), num_cols=width, table_cells=cells)
+
+
+HEADER_JOIN = " / "
+
+
+def merge_header(rows: list[list[str]], depth: int) -> list[list[str]]:
+    """The first ``depth`` rows as one header row: each column's distinct texts, top down ("Median 1 / 2024")."""
+    if depth < 2:
+        return rows
+    width = max(len(r) for r in rows)
+    levels = [r + [""] * (width - len(r)) for r in rows[:depth]]
+    header = []
+    for column in zip(*levels, strict=True):
+        parts: list[str] = []
+        for text in column:
+            if text.strip() and text not in parts:
+                parts.append(text)
+        header.append(HEADER_JOIN.join(parts))
+    return [header, *rows[depth:]]
+
+
+def table_header_depth(table: Any) -> int:
+    from granit.ingest.vision import header_depth
+
+    spanning = {
+        c.start_row_offset_idx
+        for c in table.data.table_cells
+        if c.end_col_offset_idx - c.start_col_offset_idx > 1
+    }
+    return header_depth(spanning, table.data.num_rows)
+
+
+def merge_headers(doc: Any) -> int:
+    """Merge every multi-level column header Docling transcribed; returns the tables changed. Vision's tables are merged
+    as they're filled (``fill_table`` keeps no spans, so they're skipped here)."""
+    merged = 0
+    for table in doc.tables:
+        depth = table_header_depth(table)
+        if depth:
+            grid = [[c.text for c in row] for row in table.data.grid]
+            fill_table(table, merge_header(grid, depth))
+            merged += 1
+    return merged
 
 
 def is_empty_table(table: Any) -> bool:
@@ -376,6 +421,8 @@ class DocumentResult:
     text_layer_lines: int = 0
     # pages without a text layer that Docling couldn't read, read again by Vision (or cleared, if Docling looped)
     pages_from_vision: int = 0
+    # tables whose multi-level column header was merged into one row
+    merged_headers: int = 0
     seconds: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> dict[str, Any]:
@@ -385,6 +432,7 @@ class DocumentResult:
             "tables_from_vision": self.tables_from_vision,
             "text_layer_lines": self.text_layer_lines,
             "pages_from_vision": self.pages_from_vision,
+            "merged_headers": self.merged_headers,
             "pictures": self.pictures,
             "charts": self.charts,
             "extractions": len(self.extractions),
@@ -460,7 +508,7 @@ class DocumentIngestor:
         seconds = {"docling": round(time.perf_counter() - start, 2)}
 
         pages = PageImages(path)
-        tables_from_vision = 0
+        tables_from_vision = merged_headers = 0
         try:
             start = time.perf_counter()
             extractions, charts = self._charts(doc, pages, crops, out_dir)
@@ -473,10 +521,11 @@ class DocumentIngestor:
             tables = [t for t in doc.tables if tables_by_vision or is_empty_table(t)]
             if tables:
                 start = time.perf_counter()
-                found, replaced = self._tables(tables, doc, pages, crops, out_dir)
+                found, replaced, merged_headers = self._tables(tables, doc, pages, crops, out_dir)
                 extractions += found
                 seconds["tables"] = round(time.perf_counter() - start, 2)
                 tables_from_vision = replaced
+            merged_headers += merge_headers(doc)
         finally:
             pages.close()
 
@@ -508,6 +557,7 @@ class DocumentIngestor:
             tables_from_vision=tables_from_vision,
             text_layer_lines=text_layer,
             pages_from_vision=pages_from_vision,
+            merged_headers=merged_headers,
             seconds=seconds,
         )
 
@@ -569,12 +619,12 @@ class DocumentIngestor:
 
     def _tables(
         self, tables: list[Any], doc: Any, pages: PageImages, crops: Path, out_dir: Path
-    ) -> tuple[list[Extraction], int]:
-        """Vision's ``<tables_html>`` for each table; a valid result replaces the table's cells. Returns (extractions,
-        tables replaced)."""
-        from granit.ingest.vision import html_grid
+    ) -> tuple[list[Extraction], int, int]:
+        """Vision's ``<tables_html>`` for each table; a valid result replaces the table's cells, its multi-level header
+        merged. Returns (extractions, tables replaced, headers merged)."""
+        from granit.ingest.vision import html_grid, html_header_depth
 
-        extractions, per_page, replaced = [], {}, 0
+        extractions, per_page, replaced, merged = [], {}, 0, 0
         for table in tables:
             cropped = pages.crop(table, doc)
             if cropped is None:
@@ -587,12 +637,11 @@ class DocumentIngestor:
                 image, page=page, crop=str(crop.relative_to(out_dir))
             )
             extractions.append(extraction)
-            rows = (
-                [row for html in (extraction.data or []) for row in html_grid(html)]
-                if extraction.valid
-                else []
-            )
+            htmls = (extraction.data or []) if extraction.valid else []
+            rows = [row for html in htmls for row in html_grid(html)]
             if rows:
-                fill_table(table, rows)
+                depth = html_header_depth(htmls[0])  # the header comes first
+                fill_table(table, merge_header(rows, depth))
                 replaced += 1
-        return extractions, replaced
+                merged += depth > 0
+        return extractions, replaced, merged

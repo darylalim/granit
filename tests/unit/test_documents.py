@@ -371,3 +371,132 @@ def test_a_page_with_a_table_or_chart_keeps_doclings_reading() -> None:
     chart = receipt_as_docling_saw_it()
     documents.attach_chart(chart.pictures[0], [["Quarter", "Revenue"], ["Q1", "120"]])
     assert documents.has_structure(chart, 1)
+
+
+def projections_table(doc: Any) -> Any:
+    """The Fed projections table as Granite-Docling transcribed it (v29 private set): a spanning group row over the years."""
+    from docling_core.types.doc import TableCell, TableData
+
+    groups = ["Median 1", "Central Tendency 2", "Range 3"]
+    years = ["2024", "2025", "2026", "Longer run"]
+    cells = [
+        TableCell(
+            text="",
+            start_row_offset_idx=0,
+            end_row_offset_idx=1,
+            start_col_offset_idx=0,
+            end_col_offset_idx=1,
+        )
+    ]
+    cells += [
+        TableCell(
+            text=g,
+            start_row_offset_idx=0,
+            end_row_offset_idx=1,
+            start_col_offset_idx=1 + 4 * i,
+            end_col_offset_idx=5 + 4 * i,
+        )
+        for i, g in enumerate(groups)
+    ]
+    body = [["Variable", *years * 3]] + [
+        [f"Variable {r}", *[f"{r}.{c}" for c in range(12)]] for r in range(30)
+    ]
+    cells += [
+        TableCell(
+            text=text,
+            start_row_offset_idx=r + 1,
+            end_row_offset_idx=r + 2,
+            start_col_offset_idx=c,
+            end_col_offset_idx=c + 1,
+        )
+        for r, row in enumerate(body)
+        for c, text in enumerate(row)
+    ]
+    return doc.add_table(data=TableData(num_rows=len(body) + 1, num_cols=13, table_cells=cells))
+
+
+def test_a_multi_level_header_is_merged_into_one_row() -> None:
+    """v29 private set: Markdown kept only "Median 1 | Median 1 | …" as the header; the years were a body row."""
+    from docling_core.types.doc import DoclingDocument
+
+    doc = DoclingDocument(name="t")
+    table = projections_table(doc)
+    assert documents.table_header_depth(table) == 2
+    assert documents.merge_headers(doc) == 1
+    grid = [[c.text for c in row] for row in table.data.grid]
+    assert grid[0][:2] == ["Variable", "Median 1 / 2024"]
+    assert grid[0][5:7] == ["Central Tendency 2 / 2024", "Central Tendency 2 / 2025"]
+    assert grid[0][-1] == "Range 3 / Longer run"
+    assert grid[1][:2] == ["Variable 0", "0.0"] and len(grid) == 31
+    assert documents.merge_headers(doc) == 0  # already one row
+
+
+def test_every_chunk_of_a_split_table_names_its_columns() -> None:
+    from docling_core.types.doc import DoclingDocument
+
+    from granit.store.chunking import chunk_document
+
+    doc = DoclingDocument(name="t")
+    doc.add_heading("Summary of Economic Projections")
+    projections_table(doc)
+    documents.merge_headers(doc)
+    tables = [c for c in chunk_document(doc) if c.element == "table"]
+    assert len(tables) > 1  # split by rows, the header repeated
+    assert all("Central Tendency 2 / 2026" in c.text.splitlines()[0] for c in tables)
+
+
+@pytest.mark.parametrize(
+    ("rows", "depth", "header"),
+    [
+        # a rowspan repeats the stub's name: kept once
+        (
+            [["Region", "2025", "2025"], ["Region", "H1", "H2"], ["North", "1", "2"]],
+            2,
+            ["Region", "2025 / H1", "2025 / H2"],
+        ),
+        # three levels (Census: year / Number / Estimate), ragged Vision rows padded
+        (
+            [
+                ["", "2022", "2022"],
+                ["State", "Number", "Number"],
+                ["", "Estimate", "Margin"],
+                ["Ohio", "1"],
+            ],
+            3,
+            ["State", "2022 / Number / Estimate", "2022 / Number / Margin"],
+        ),
+    ],
+)
+def test_merge_header(rows: list[list[str]], depth: int, header: list[str]) -> None:
+    merged = documents.merge_header(rows, depth)
+    assert merged[0] == header and merged[1:] == rows[depth:]
+
+
+def test_one_row_headers_and_spanning_totals_are_left_alone() -> None:
+    from docling_core.types.doc import DoclingDocument, TableCell, TableData
+
+    rows = [["Description", "Amount"], ["Paper", "$478.40"]]
+    assert documents.merge_header(rows, 0) == rows
+    doc = DoclingDocument(name="t")
+    cells = [
+        TableCell(
+            text=t,
+            start_row_offset_idx=r,
+            end_row_offset_idx=r + 1,
+            start_col_offset_idx=c,
+            end_col_offset_idx=c + 1,
+        )
+        for r, row in enumerate([["Item", "Qty", "Amount"], ["Paper", "40", "$478.40"]])
+        for c, t in enumerate(row)
+    ]
+    cells.append(
+        TableCell(
+            text="Total due",
+            start_row_offset_idx=2,
+            end_row_offset_idx=3,
+            start_col_offset_idx=0,
+            end_col_offset_idx=2,
+        )
+    )
+    doc.add_table(data=TableData(num_rows=3, num_cols=3, table_cells=cells))
+    assert documents.merge_headers(doc) == 0  # a spanning totals row isn't a header

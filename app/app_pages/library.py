@@ -22,6 +22,7 @@ from granit.ui.views import (
     latest,
     library_rows,
     model_label,
+    other_vocabulary,
     read_json,
     source_param,
     stamp,
@@ -165,6 +166,15 @@ with st.container(horizontal=True):
         summarize = st.button(
             "Summarize meeting", type="primary", icon=":material/summarize:", disabled=not ready
         )
+        if st.button(
+            "Re-transcribe",
+            icon=":material/spellcheck:",
+            disabled=not ready or not other_vocabulary(source, store.vocabulary()),
+            help="Transcribes the recording again with the library's current names and terms (set on the Ingest"
+            " page), on the next batch. Enabled when the list has changed since this recording was transcribed.",
+        ):
+            store.queue_ingest(source)
+            st.rerun()
     else:
         summarize = False
         if st.button(

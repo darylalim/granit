@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from granit.ingest.audio import timestamp
+from granit.ingest.audio import parse_terms, timestamp
 from granit.search.hybrid import Hit, hit_from_row
 from granit.store.db import AUDIO_EXTENSIONS, DOCUMENT_EXTENSIONS, Source, Store, kind_of
 from granit.ui.layout import safe_md
@@ -207,6 +207,22 @@ def transcript_md(transcript: dict[str, Any]) -> str:
     return "\n\n".join(
         f"`{timestamp(s['start'])}` {safe_md(s['text'])}" for s in transcript["segments"]
     )
+
+
+def vocabulary_text(terms: list[str]) -> str:
+    return "\n".join(terms)
+
+
+def save_vocabulary(store: Store, text: str) -> list[str]:
+    """The Ingest page's names-and-terms box → the library's vocabulary (one per line or comma-separated)."""
+    terms = parse_terms(text)
+    store.set_vocabulary(terms)
+    return terms
+
+
+def other_vocabulary(source: Source, terms: list[str]) -> bool:
+    """A recording transcribed with a different names list than the library's current one (re-transcribe to apply it)."""
+    return source.kind == "audio" and source.info.get("vocabulary", []) != terms
 
 
 def read_json(path: Path) -> Any:

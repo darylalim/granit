@@ -10,6 +10,7 @@ Both use one format, in one directory:
 - ``summaries/<name>.yaml``: ``{file, action_items: [{owner, task, due}], decisions: [...]}``.
 - ``transcripts/<name>.txt``: what was said, for WER (``file:`` on the first line names the recording).
 - ``tables/<name>.json``: ``{file, type, grid}``: the known cells of the file's table(s), for Docling vs Vision.
+- ``vocabulary.txt`` (optional): the library's names and terms, one per line or comma-separated (``audio.parse_terms``).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ import yaml
 
 from granit.config import DATA_DIR, PROJECT_ROOT
 from granit.evaluate.metrics import Ref
+from granit.ingest.audio import parse_terms
 from granit.store.db import sha256_of
 
 CATEGORIES = ("document", "meeting", "cross-source", "unanswerable")
@@ -82,6 +84,7 @@ class EvalSet:
     summaries: list[SummaryCase]
     transcripts: list[TranscriptCase]
     tables: list[TableCase]
+    vocabulary: list[str] = field(default_factory=list)
 
     @property
     def files_dir(self) -> Path:
@@ -142,6 +145,9 @@ def load_set(name: str) -> EvalSet:
             TableCase(p.stem, _file(root, d["file"]), d["type"], d["grid"])
             for p, d in _each(root / "tables", "*.json", json.loads)
         ],
+        vocabulary=parse_terms(vocab.read_text())
+        if (vocab := root / "vocabulary.txt").is_file()
+        else [],
     )
 
 

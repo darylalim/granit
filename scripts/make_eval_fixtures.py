@@ -436,6 +436,10 @@ def hard_tables() -> list[HardTable]:
 
 VOICES = {"Elena": "Samantha", "Priya": "Karen", "Sam": "Daniel", "Marcus": "Rishi"}
 
+
+# What a user would list on the Ingest page ("Names and terms in recordings"): the people and the names that come up.
+VOCABULARY = ["Elena", "Priya", "Sam", "Marcus", "Northbeam", "Tacoma", "Atlas"]
+
 MEETINGS: dict[str, dict[str, Any]] = {
     "vendor-review": {
         "lines": [
@@ -650,6 +654,7 @@ def main() -> None:
             (OUT / "summaries" / f"{name}.yaml").write_text(
                 yaml.safe_dump(summary, sort_keys=False, width=120)
             )
+        (OUT / "vocabulary.txt").write_text("\n".join(VOCABULARY) + "\n")
 
     questions = []
     for item in QUESTIONS:

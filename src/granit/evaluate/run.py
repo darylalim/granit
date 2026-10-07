@@ -242,10 +242,21 @@ class Runner:
     # Phase A
 
     def _queue(self, store: Store) -> dict[str, int]:
+        store.set_vocabulary(self.set.vocabulary)
         tables = self.set.table_files()
         for path in self.set.files():
             params = {"vision_tables": True} if path in tables else None
-            store.add_file(path, name=str(path.relative_to(self.set.files_dir)), params=params)
+            source, created = store.add_file(
+                path, name=str(path.relative_to(self.set.files_dir)), params=params
+            )
+            if (
+                not created
+                and source.kind == "audio"
+                and source.info.get("vocabulary", []) != self.set.vocabulary
+            ):
+                store.queue_ingest(
+                    source
+                )  # transcribed with another names list: as the Library's "Re-transcribe"
         sources = {s.sha256: s for s in store.sources()}
         from granit.store.db import sha256_of
 

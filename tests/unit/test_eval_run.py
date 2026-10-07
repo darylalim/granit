@@ -359,3 +359,22 @@ def test_every_cli_help_renders(capsys: pytest.CaptureFixture[str]) -> None:
         for action in p._actions:
             if hasattr(action, "choices") and isinstance(action.choices, dict):
                 stack.extend(action.choices.values())
+
+
+def test_the_set_vocabulary_is_applied_and_retranscribes_on_change(
+    eval_root: Path, tmp_path: Path
+) -> None:
+    (eval_root / "vocabulary.txt").write_text("Northbeam\nPriya, Elena\n")
+    assert load_set(str(eval_root)).vocabulary == ["Northbeam", "Priya", "Elena"]
+    library = tmp_path / "library"
+    runner(eval_root, library).run()
+    store = Store(library)
+    assert store.vocabulary() == ["Northbeam", "Priya", "Elena"]
+    audio = [s for s in store.sources() if s.kind == "audio"]
+    assert audio and all(s.info["vocabulary"] == ["Northbeam", "Priya", "Elena"] for s in audio)
+    ingests = len([j for j in store.jobs() if j.task == "ingest"])
+    runner(eval_root, library).run()  # same list: nothing transcribed again
+    assert len([j for j in Store(library).jobs() if j.task == "ingest"]) == ingests
+    (eval_root / "vocabulary.txt").write_text("Northbeam\n")
+    runner(eval_root, library).run()  # another list: the recordings are transcribed again
+    assert len([j for j in Store(library).jobs() if j.task == "ingest"]) == ingests + len(audio)

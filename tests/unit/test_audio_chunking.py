@@ -271,3 +271,51 @@ def test_other_numbers_before_clock_stay() -> None:
         assert audio.fix_oclock(words) == words
     assert audio.fix_oclock([Word("20", 0, 1), Word("clocks", 1, 2)])[0].text == "20"
     assert audio.fix_oclock([Word("20", 0, 1)]) == [Word("20", 0, 1)]
+
+
+def test_terms_parse_from_lines_and_commas() -> None:
+    assert audio.parse_terms("Northbeam\nPriya, Elena ,, sam\n  priya \nTacoma  WA") == [
+        "Northbeam",
+        "Priya",
+        "Elena",
+        "sam",
+        "Tacoma WA",
+    ]
+    assert audio.parse_terms(" \n, ") == []
+
+
+def test_vocabulary_spells_names_the_users_way() -> None:
+    terms = ["Northbeam", "Priya", "Sam", "Tacoma WA"]
+    words = [
+        Word("the", 0.0, 0.2),
+        Word("north", 0.3, 0.6),
+        Word("beam", 0.6, 0.9),
+        Word("contract,", 1.0, 1.4),
+        Word("pria", 1.5, 1.8),
+        Word("same", 1.9, 2.1),
+        Word("sam.", 2.2, 2.4),
+        Word("tacoma", 2.5, 2.9),
+        Word("wa", 2.9, 3.1),
+    ]
+    fixed = audio.apply_vocabulary(words, terms)
+    assert [w.text for w in fixed] == [
+        "the",
+        "Northbeam",
+        "contract,",
+        "Priya",
+        "same",
+        "Sam.",
+        "Tacoma WA",
+    ]
+    assert fixed[1] == Word("Northbeam", 0.3, 0.9)  # the run's time span
+    assert audio.apply_vocabulary(words, []) == words
+
+
+def test_transcript_with_vocabulary_rebuilds_segment_text() -> None:
+    words = (Word("ask", 0.0, 0.3), Word("pria", 0.4, 0.8))
+    transcript = Transcript(
+        2.0, 1.0, 1, (Segment(0.0, 0.8, "ask pria", words), Segment(1.0, 1.5, "no words")), "m"
+    )
+    fixed = transcript.with_vocabulary(["Priya"])
+    assert [s.text for s in fixed.segments] == ["ask Priya", "no words"]
+    assert transcript.with_vocabulary([]) is transcript

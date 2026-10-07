@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
@@ -282,6 +282,63 @@ def fix_oclock(words: Sequence[Word]) -> list[Word]:
     return fixed
 
 
+_EDGE_PUNCTUATION = ".,?!;:"
+_FUZZY_MIN_LETTERS = 5  # shorter terms match only exactly: "same" must never become "Sam"
+_FUZZY_RATIO = 0.85
+
+
+def parse_terms(text: str) -> list[str]:
+    """Names and terms typed one per line or comma-separated → a clean list (blank and duplicate entries dropped)."""
+    terms: list[str] = []
+    for part in re.split(r"[,\n]", text):
+        term = " ".join(part.split())
+        if term and term.lower() not in {t.lower() for t in terms}:
+            terms.append(term)
+    return terms
+
+
+def _match(run: Sequence[Word], terms: Sequence[str]) -> str | None:
+    from difflib import SequenceMatcher
+
+    joined = "".join(w.text.strip(_EDGE_PUNCTUATION) for w in run).lower()
+    for term in terms:
+        key = "".join(term.split()).lower()
+        if joined == key:
+            return term
+    if len(run) == 1:
+        for term in terms:
+            key = "".join(term.split()).lower()
+            fuzzy = len(key) >= _FUZZY_MIN_LETTERS and key.isalpha()
+            if fuzzy and SequenceMatcher(None, joined, key).ratio() >= _FUZZY_RATIO:
+                return term
+    return None
+
+
+def apply_vocabulary(words: Sequence[Word], terms: Sequence[str], max_words: int = 3) -> list[Word]:
+    """Spell the library's expected names and terms the way the user wrote them.
+
+    A run of up to ``max_words`` words that joins to a term ("north beam" → "Northbeam") becomes the term, and a single
+    word close to a term of 5+ letters ("pria" → "Priya", similarity ≥ 0.85) does too. The new word spans the run's
+    time; punctuation after the run is kept.
+    """
+    if not terms:
+        return list(words)
+    fixed: list[Word] = []
+    i = 0
+    while i < len(words):
+        for n in range(min(max_words, len(words) - i), 0, -1):
+            run = words[i : i + n]
+            if term := _match(run, terms):
+                tail = run[-1].text[len(run[-1].text.rstrip(_EDGE_PUNCTUATION)) :]
+                fixed.append(Word(term + tail, run[0].start, run[-1].end))
+                i += n
+                break
+        else:
+            fixed.append(words[i])
+            i += 1
+    return fixed
+
+
 # ── segments and transcript ──
 
 
@@ -335,6 +392,15 @@ class Transcript:
     @property
     def silence_s(self) -> float:
         return round(self.duration_s - self.speech_s, 2)
+
+    def with_vocabulary(self, terms: Sequence[str]) -> Transcript:
+        """The same transcript with ``apply_vocabulary`` on each segment's words (and its text rebuilt from them)."""
+        if not terms:
+            return self
+        segments = tuple(
+            _segment(apply_vocabulary(s.words, terms)) if s.words else s for s in self.segments
+        )
+        return replace(self, segments=segments)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)

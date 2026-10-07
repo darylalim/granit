@@ -2,7 +2,8 @@
 
 Uploads are queued, not processed at once: the models for ingest and for Q&A don't fit in memory together. Queued jobs run
 as one batch after a minute without questions, or right away with "Process now". "Accurate tables (slower)" re-reads every
-table in the uploaded documents with Granite Vision.
+table in the uploaded documents with Granite Vision. "Names and terms" is the library's vocabulary: recordings transcribed
+from then on spell those names the user's way (``audio.apply_vocabulary``).
 """
 
 from datetime import datetime
@@ -11,7 +12,7 @@ import streamlit as st
 
 from granit.ui.layout import reading_column, safe_md, table_height
 from granit.ui.session import backend, open_store, plural, process_now_button
-from granit.ui.views import UPLOAD_TYPES, add_upload, job_rows
+from granit.ui.views import UPLOAD_TYPES, add_upload, job_rows, save_vocabulary, vocabulary_text
 
 ACCURATE_HELP = (
     "Re-reads every table in these documents with Granite Vision (about 5 s per table). "
@@ -92,4 +93,25 @@ with reading_column("ingest"):
                 " with Granite Vision, use **Re-ingest with accurate tables** in the Library.",
                 icon=":material/info:",
             )
+    if (saved := st.session_state.pop("vocabulary_saved", None)) is not None:
+        st.toast(f"Saved {plural(saved, 'name')}", icon=":material/check:")
+    terms = open_store().vocabulary()
+    with (
+        st.expander(f"Names and terms in recordings ({len(terms)})", icon=":material/spellcheck:"),
+        st.form("vocabulary", border=False),
+    ):
+        text = st.text_area(
+            "Names and terms",
+            value=vocabulary_text(terms),
+            placeholder="Northbeam\nPriya, Elena, Sam",
+            label_visibility="collapsed",
+        )
+        st.caption(
+            "People, products and places that come up in your recordings, one per line or comma-separated."
+            ' Close mishearings are spelled your way ("north beam" → Northbeam). Applies to recordings'
+            " transcribed from now on; re-transcribe older ones in the Library."
+        )
+        if st.form_submit_button("Save", icon=":material/save:"):
+            st.session_state["vocabulary_saved"] = len(save_vocabulary(open_store(), text))
+            st.rerun()  # the expander's count reads the saved list
     queue()

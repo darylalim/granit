@@ -264,3 +264,11 @@ def test_vector_blob_requires_one_dimension() -> None:
     assert len(db.vector_blob(np.zeros(4))) == 8
     with pytest.raises(ValueError):
         db.vector_blob(np.zeros((2, 2)))
+
+
+def test_vocabulary_is_saved_for_the_library(store: Store) -> None:
+    assert store.vocabulary() == []
+    store.set_vocabulary(["Northbeam", "Priya Natarajan"])
+    store.set_vocabulary(["Northbeam", "Priya", "Zoë"])  # replaced, not appended
+    assert store.vocabulary() == ["Northbeam", "Priya", "Zoë"]
+    assert Store(store.root).vocabulary() == ["Northbeam", "Priya", "Zoë"]  # persisted

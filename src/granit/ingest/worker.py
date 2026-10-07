@@ -119,7 +119,8 @@ class IngestWorker:
         out.mkdir(parents=True, exist_ok=True)
         extractions: list[NewExtraction] = []
         if source.kind == "audio":
-            transcript = self.transcriber.transcribe(path)
+            vocabulary = self.store.vocabulary()
+            transcript = self.transcriber.transcribe(path).with_vocabulary(vocabulary)
             (out / "transcript.json").write_text(
                 json.dumps(transcript.to_json(), ensure_ascii=False)
             )
@@ -129,6 +130,7 @@ class IngestWorker:
                 "speech_s": transcript.speech_s,
                 "silence_s": transcript.silence_s,
                 "segments": len(transcript.segments),
+                "vocabulary": vocabulary,
             }
         else:
             from docling_core.types.doc import DoclingDocument

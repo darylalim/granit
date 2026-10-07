@@ -591,6 +591,20 @@ class Store:
             )
             self._insert_extractions(None, source.id, [extraction])
 
+    # the library's expected names and terms (applied when recordings are transcribed)
+
+    def vocabulary(self) -> list[str]:
+        row = self.conn.execute("SELECT value FROM meta WHERE key = 'vocabulary'").fetchone()
+        return json.loads(row[0]) if row else []
+
+    def set_vocabulary(self, terms: Sequence[str]) -> None:
+        with transaction(self.conn):
+            self.conn.execute(
+                "INSERT INTO meta (key, value) VALUES ('vocabulary', ?)"
+                " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                (json.dumps(list(terms), ensure_ascii=False),),
+            )
+
     # reads used by search
 
     def corpus_version(self) -> int:

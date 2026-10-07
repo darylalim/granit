@@ -40,6 +40,10 @@ uv run granit eval label --set private              # ~2 min per question: tick 
 uv run granit eval run --set private
 ```
 
+No documents of your own yet? `uv run python scripts/fetch_real_eval.py` fills `data/eval/` with real published content
+instead (US federal PDFs, a scanned archive page, CORD receipt photos, two AMI meetings) and 31 questions whose
+answers were checked against the sources. Add your own files and questions to it over time.
+
 Optional references, same format as the public set: `extraction/<name>.json`, `summaries/<name>.yaml`,
 `transcripts/<name>.txt` (first line `file: files/…`), `tables/<name>.json`.
 

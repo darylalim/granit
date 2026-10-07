@@ -39,6 +39,8 @@ def test_facts_match_whole_words_after_normalizing() -> None:
     assert m.fact_coverage([], answer) is None
     assert m.fact_found("two years | 2 years", "Renew for 2 years [1].")
     assert not m.fact_found("two years | 2 years", "Renew for 3 years.")
+    # v30 private set: the answer spaced the en dash of a range
+    assert m.fact_found("3.9–4.3 | 3.9 to 4.3", "is 3.9 – 4.3 percent【3】.")
 
 
 # ── retrieval ──

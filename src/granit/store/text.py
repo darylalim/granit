@@ -162,6 +162,7 @@ def canonical(text: str) -> str:
     thing in different formats (``$4,980.00`` = ``4980``, ``October 14, 2026`` = ``2026-10-14``): used by ingest's text-layer
     check and by the eval's fact and field matching."""
     t = unicodedata.normalize("NFKC", str(text)).translate(DASHES).translate(QUOTES).lower()
+    t = re.sub(r"(?<=\d) +- +(?=\d)", "-", t)  # a range: "3.9 – 4.3" = "3.9-4.3"
     t = DATE_MDY_NAME.sub(lambda m: _iso(m[3], MONTHS[m[1]], m[2]), t)
     t = DATE_DMY_NAME.sub(lambda m: _iso(m[3], MONTHS[m[2]], m[1]), t)
     t = DATE_MDY_SLASH.sub(lambda m: _iso(m[3], int(m[1]), m[2]), t)

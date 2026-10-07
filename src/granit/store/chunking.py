@@ -59,12 +59,14 @@ class _Piece:
     pages: list[int]
 
 
-def _element(doc_items: list[Any]) -> str:
-    labels = {str(item.label) for item in doc_items}
+def _element(doc_items: list[Any], text: str) -> str:
+    # a caption comes with its table or picture (v30: captioned tables were chunked as text, split without a header)
+    labels = {str(item.label) for item in doc_items} - {"caption"}
+    has_table = any(line.startswith("|") for line in text.splitlines())
     if labels == {"table"}:
         return "table"
-    if labels == {"picture"} or labels == {"chart"}:
-        return "chart"  # pictures only produce text when they carry chart data
+    if (labels == {"picture"} or labels == {"chart"}) and has_table:
+        return "chart"  # a picture's text is its chart data (and caption); a bare caption is text
     return "text"
 
 
@@ -109,7 +111,7 @@ def _pieces(doc: Any) -> Iterator[_Piece]:
         headings = list(chunk.meta.headings or [])
         if title and headings[:1] != [title]:
             headings.insert(0, title)  # every chunk says which document it's from
-        yield _Piece(text, _element(items), CONTEXT_SEPARATOR.join(headings), pages)
+        yield _Piece(text, _element(items, text), CONTEXT_SEPARATOR.join(headings), pages)
 
 
 def chunk_document(doc: Any, target: int = TARGET_CHARS, limit: int = MAX_CHARS) -> list[NewChunk]:
@@ -177,10 +179,14 @@ def _split_text(text: str, limit: int) -> list[str]:
 
 
 def _split_table(text: str, limit: int) -> list[str]:
-    """Split a Markdown table by rows, repeating the header (and its separator line) in every part."""
+    """Split a Markdown table by rows, repeating the caption above it, the header and its separator line in every
+    part."""
     lines = text.splitlines()
-    header = lines[:2] if len(lines) > 2 and set(lines[1]) <= set("|-: ") else lines[:1]
-    body = lines[len(header) :]
+    start = next((i for i, line in enumerate(lines) if line.startswith("|")), 0)
+    end = (
+        start + 2 if len(lines) > start + 2 and set(lines[start + 1]) <= set("|-: ") else start + 1
+    )
+    header, body = lines[:end], lines[end:]
     head = "\n".join(header)
     parts: list[str] = []
     rows: list[str] = []

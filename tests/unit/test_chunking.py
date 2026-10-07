@@ -109,3 +109,31 @@ def test_transcripts_group_segments_and_keep_times() -> None:
 )
 def test_citation(args: tuple, text: str) -> None:
     assert citation(*args) == text
+
+
+def test_split_tables_repeat_the_section_row_they_continue() -> None:
+    # Census e-commerce release: one table, "Adjusted" then "Not Adjusted" rows with identical columns (doc-11).
+    rows = ["| Adjusted | Adjusted | Adjusted |"] + [
+        f"| Q{i} | {i}00 | {i}.0 |" for i in range(1, 5)
+    ]
+    rows += ["| Not Adjusted | Not Adjusted | Not Adjusted |"] + [
+        f"| Q{i} | {i}11 | {i}.1 |" for i in range(1, 5)
+    ]
+    table = "\n".join(["| Quarter | Sales | Share |", "|---|---|---|", *rows])
+    parts = chunking._split_table(table, limit=110)
+    assert len(parts) > 2
+    for part in parts:
+        assert chunking.section_row(part.splitlines()[2]), (
+            part
+        )  # every part names its section first
+    data = [line for p in parts for line in p.splitlines()[2:] if not chunking.section_row(line)]
+    assert data == [r for r in rows if not chunking.section_row(r)]  # every data row once, in order
+    assert any(p.splitlines()[2].startswith("| Not Adjusted") and "| Q4 | 411" in p for p in parts)
+
+
+def test_section_rows() -> None:
+    assert chunking.section_row("| Not Adjusted | Not Adjusted | Not Adjusted |")
+    assert not chunking.section_row("| 1,200 | 1,200 |")  # repeated numbers are data
+    assert not chunking.section_row("| Q1 | 100 | 1.0 |")
+    assert not chunking.section_row("| | | |")
+    assert not chunking.section_row("| Total |")  # a one-column table's rows are all "spanning"

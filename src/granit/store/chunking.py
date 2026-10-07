@@ -178,9 +178,21 @@ def _split_text(text: str, limit: int) -> list[str]:
     return parts
 
 
+def section_row(line: str) -> bool:
+    """A table row that labels the rows under it: one spanning cell, repeated in every column by the Markdown export
+    (``| Not Adjusted | Not Adjusted | … |``), and not a number."""
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    return (
+        len(cells) > 1
+        and cells[0] != ""
+        and len(set(cells)) == 1
+        and not re.fullmatch(r"[-+()$%.,\d\s]+", cells[0])
+    )
+
+
 def _split_table(text: str, limit: int) -> list[str]:
     """Split a Markdown table by rows, repeating the caption above it, the header and its separator line in every
-    part."""
+    part, and the latest section row ("Not Adjusted") in the parts that continue its section."""
     lines = text.splitlines()
     start = next((i for i, line in enumerate(lines) if line.startswith("|")), 0)
     end = (
@@ -190,10 +202,13 @@ def _split_table(text: str, limit: int) -> list[str]:
     head = "\n".join(header)
     parts: list[str] = []
     rows: list[str] = []
+    section: str | None = None
     for line in body:
         if rows and len(head) + sum(len(r) + 1 for r in rows) + len(line) + 1 > limit:
             parts.append("\n".join([head, *rows]))
-            rows = []
+            rows = [section] if section and not section_row(line) else []
+        if section_row(line):
+            section = line
         rows.append(line)
     if rows or not parts:
         parts.append("\n".join([head, *rows]))

@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v36 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v37 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v36: M0–M7 done; **the public set passes every 1.0 criterion**; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v37: M0–M7 done; **the public set passes every 1.0 criterion**; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -164,6 +164,13 @@ misread name takes the single closest run of words in the text (`Sam Okator` →
 carry a `vocabulary.txt` (the public one: the four people, Northbeam, Tacoma, Atlas). Public WER 0.055 → **0.029**
 (vendor-review 0.112 → 0.034), fact coverage 0.981 → **1.000**: **the public set passes**. Layout check: 24 + 24 screenshots,
 0 problems (Library with a recording: Re-transcribe beside Summarize at 760 px).
+
+**Changes in v37:** **table section rows repeat in split chunks** (§4.9 *Private set*, item 3): a row that is one repeated,
+non-numeric cell (`| Not Adjusted | Not Adjusted | … |`) labels the rows under it, and every later part of a split table now
+starts with its latest section row after the header. doc-11 answered (322,862, not adjusted); private fact coverage 0.796 →
+**0.833**, false declines 0.037 → 0; public unchanged (passes). **Tried and reverted:** a Q&A rule "in a recording, answer
+with what a later part settles" left mtg-01 unchanged (the answer still gives the first time proposed, with both passages in
+the prompt), so the prompt stays as it was.
 ---
 
 ## 1. Scope (v1)
@@ -1552,7 +1559,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 | Metric | First run | v29 | v30 | Pass at | Cause of the remaining gap |
 |---|---|---|---|---|---|
 | Retrieval recall@8 | 0.889 | **1.000** | **1.000** | ≥ 0.85 | ✅ (BM25 0.852 → vectors 0.833 → hybrid 0.870 → + rerank 0.889 in the first run) |
-| Fact coverage | 0.648 | 0.741 | 0.796 | ≥ 0.85 | ❌ tables (items 2–3 below); the scan's date stamp; spoken numbers |
+| Fact coverage | 0.648 | 0.741 | 0.796 | ≥ 0.85 | ❌ v37: **0.833** (doc-11 fixed). Left: doc-02 row labels, the scan (Vision misreads), mtg-01 / mtg-04 answers, mtg-06 merged number |
 | Unanswerable declined | 1.000 | 1.000 | 1.000 | ≥ 0.80 | ✅ |
 | Guardian groundedness | 1.000 | 1.000 | 0.962 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
 | Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ item 6 below: Vision misreads digits on faint print (both receipts now flagged invalid by `x-sums`) |
@@ -1569,6 +1576,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 3. **Table captions missing from chunk context:** the Census release's seasonally adjusted and not-adjusted tables are identical
    chunks; the answer took 283,293 (adjusted) for 322,862 (not adjusted). v30 finding: the label is not a caption but a section
    row inside the table (`Adjusted` / `Not adjusted`, one cell spanning every column); the question now declines.
+   **Fixed in v37:** split table parts repeat their latest section row (`chunking.section_row`); doc-11 answered.
 4. **Spoken numbers and WER (v34 triage):** TurboCTC's number formatting turned "eleven o'clock" into `110 clock` (~~fixed in
    v34~~, `audio.fix_oclock`) and merges adjacent or repeated numbers: a stuttered "twelve… twelve fifty" → `€1212.5`, "12 13"
    → `1213`, "3 3" → `33` (not fixed: `1213` can be a real number). Scoring gaps (`first` / `1st`, a lone `hundred` / `100`)

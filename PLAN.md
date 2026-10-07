@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v30 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v31 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v30: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v31: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring fixed (§4.9 *Private set*, item 5). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -118,6 +118,16 @@ Markdown has one header row, so the chunks repeated `Median 1` ×4 and lost the 
 row (`Median 1 / 2024`, §3.6 item 7), and **captioned tables are chunked as tables** (caption + header repeated in every piece)
 instead of as sentences. Private set: fact coverage 0.759 → **0.796**; public set unchanged (no change of 2 points or more).
 Action-item recall (0.283) is triaged (§4.9 *Private set*, item 5).
+
+**Changes in v31:** action-item scoring, from the triage. The keyword **stemmer** maps word forms together (`splitting` /
+`split`, `arrangement` / `arranging`, `offices` / `office`), and an **owner the transcript never says** (`metrics.mentions`: the
+name's words in a row, with the usual spelling slips) is met by no owner, because nothing in the audio could give it; a guessed
+name still misses. The public `peak-season` meeting had the same gap: its reference owner "Marcus" was only a speaker label in
+the fixture script. Its line now says the name ("Marcus, can you start the hiring?"), so the public set still tests owners.
+Private action-item recall 0.283 → **0.383**; public 0.833 → **1.000** (Marcus found), fact coverage 0.962 → **0.981** (mtg-04
+answerable). **Public decision recall 0.667 → 0.333** (not a gate metric): with the request in the transcript, the summary
+puts every point in `action_items` and returns no decisions (same transcript with the old wording: the Tacoma lease decision
+found, at temperature 0). A summary-prompt weakness the fixed fixture exposed; next: the summary prompt (item 5).
 ---
 
 ## 1. Scope (v1)
@@ -1433,7 +1443,7 @@ Granite-Docling.
 | Guardian groundedness / answer relevance | 0.958 / 0.958 | ≥ 0.90 | informational until the judge check (below) |
 | Extraction field accuracy | 0.935 | ≥ 0.98 | ❌ 4 of 62 fields: `Sam Okator`, a missed `approved_by`, two ISO dates rewritten as `09-05-2026` (flagged invalid, never guessed) |
 | Table cell F1 | **0.997** | ≥ 0.95 | ✅ with the empty-table fallback (Docling alone: 0.747) |
-| Action-item recall | 0.833 | ≥ 0.90 | ❌ "*I'll* post the job ads": no speaker diarization, so no owner |
+| Action-item recall | 0.833 | ≥ 0.90 | ❌ "*I'll* post the job ads": no speaker diarization, so no owner (v31: the name was never said; the fixture now says it, 1.000) |
 | WER | 0.056 | ≤ 0.05 | ❌ vendor-review 0.112: "Northbeam" → "north beam", "Priya" → "pria"; the other two 0.018 and 0.037 |
 | Answer time p50 / p90 | 4.6 / 6.1 s | (recorded) | first token 2.8 / 4.6 s |
 
@@ -1491,7 +1501,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 | Unanswerable declined | 1.000 | 1.000 | 1.000 | ≥ 0.80 | ✅ |
 | Guardian groundedness | 1.000 | 1.000 | 0.962 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
 | Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ cord-020's `.` thousands separator (4 fields), cord-004 subtotal |
-| Action-item recall | 0.283 | 0.283 | 0.283 | ≥ 0.80 | ❌ item 5 below: role owners without diarization, matching, and real misses |
+| Action-item recall | 0.283 | 0.283 | 0.283 | ≥ 0.80 | ❌ item 5 below; v31 scoring fix: **0.383** (the rest: the summaries) |
 | WER | 0.178 | 0.178 | 0.178 | ≤ 0.10 | ❌ AMI room mix; number formatting (`110 clock`, `€1212.5` for a stuttered "twelve fifty") |
 
 **Triaged causes (read from the stored chunks and answers):**
@@ -1512,8 +1522,9 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
    person's task merged into another's (the interface concept under *industrial design*), a role read as an owner (*market trend
    watcher*), the next-meeting time missed, two "poll others" items folded into one. The keyword matcher is also strict: its
    stemmer doesn't map `splitting` → `split` or `arrangement` → `arrang`. The summary also writes `someone` for unnamed owners
-   (the prompt asks for `null`). Candidate fixes, not yet chosen: matcher stemming and role owners met by a `null` owner when the
-   transcript has no speaker labels (measurement; a reason in the PR), the summary prompt, speaker diarization.
+   (the prompt asks for `null`). ~~Matcher stemming; owners the transcript never says~~ **fixed in v31** (0.383; one owner is a
+   guessed first name, one task matches only in meaning). Next: the summary prompt (one item per person, stated roles as owners,
+   `null` not `someone`, meeting times as items, decisions alongside action items); speaker diarization last.
 
 #### Running and comparing
 

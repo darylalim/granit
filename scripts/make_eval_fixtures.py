@@ -457,8 +457,8 @@ MEETINGS: dict[str, dict[str, Any]] = {
     "peak-season": {
         "lines": [
             ("Sam", "September volumes were the highest this year, with three thousand six hundred fifty five shipments."),
-            ("Elena", "We need the twenty five seasonal workers in place by November fifteenth."),
-            ("Marcus", "I'll post the seasonal job ads on Monday."),
+            ("Elena", "We need the twenty five seasonal workers in place by November fifteenth. Marcus, can you start the hiring?"),
+            ("Marcus", "Sure, I'll post the seasonal job ads on Monday."),
             ("Sam", "The Tacoma warehouse is at eighty seven percent capacity, so we should lease overflow space."),
             ("Elena", "Agreed. Sam, please get three quotes for overflow storage by next Friday."),
             ("Sam", "Okay."),
@@ -556,7 +556,7 @@ QUESTIONS = [
     q("mtg-01", "Who will send the signed Northbeam renewal to procurement, and by when?", "meeting", ["Priya", "Thursday"], ("vendor-review", [4, 5])),
     q("mtg-02", "What did the team decide about the fleet tracking contract?", "meeting", ["two years | 2 years | 2-year | two-year"], ("vendor-review", [3])),
     q("mtg-03", "How much did the new route reports save on fuel?", "meeting", ["9% | nine percent | 9 percent"], ("vendor-review", [2])),
-    q("mtg-04", "Who will post the seasonal job ads, and when?", "meeting", ["Marcus", "Monday"], ("peak-season", [2])),
+    q("mtg-04", "Who will post the seasonal job ads, and when?", "meeting", ["Marcus", "Monday"], ("peak-season", [1, 2])),
     q("mtg-05", "How full is the Tacoma warehouse, according to the peak season meeting?", "meeting", ["87% | eighty seven percent | eighty-seven percent | 87 percent"], ("peak-season", [3])),
     q("mtg-06", "What is the new go-live date for Project Atlas mentioned in the check-in?", "meeting", ["November 3 | November third | 2026-11-03 | Nov 3"], ("atlas-checkin", [1])),
     q("mtg-07", "Who is responsible for the barcode scanner firmware update?", "meeting", ["Sam"], ("atlas-checkin", [3])),

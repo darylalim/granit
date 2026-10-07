@@ -307,6 +307,7 @@ class Runner:
         return rows, items
 
     def _summaries(self, store: Store, sources: dict[str, Source], qa: Any) -> dict[str, Any]:
+        from granit.ingest.audio import Transcript
         from granit.reason.meetings import summarize_source
         from granit.store.db import sha256_of
 
@@ -317,7 +318,12 @@ class Runner:
                 recalls.append(0.0)
                 continue
             summary = summarize_source(store, source, qa.llm, qa.counter)
-            recall, precision = m.action_items(case.action_items, summary.data["action_items"])
+            transcript = Transcript.from_json(
+                json.loads((store.derived_dir(source) / "transcript.json").read_text())
+            )
+            recall, precision = m.action_items(
+                case.action_items, summary.data["action_items"], transcript.text
+            )
             recalls.append(recall)
             precisions.append(precision)
             for d in case.decisions:

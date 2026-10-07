@@ -7,7 +7,8 @@
 - **Extraction:** per-field exact match after normalization.
 - **Tables:** cell F1 between grids, after expanding merged cells and aligning rows and columns in order (a 2D longest
   common subsequence, GriTS-style), so an extra header row or a shifted column costs only the cells that are really wrong.
-- **Summaries:** action-item recall / precision (owner matches, at least half of the reference task's keywords present).
+- **Summaries:** action-item recall / precision (owner matches, at least half of the reference task's keywords present). An
+  owner the transcript never says (a role the annotators knew from metadata) can't be heard, so no owner meets it.
 - **Agreement:** Cohen's κ for the Guardian check.
 """
 
@@ -234,9 +235,15 @@ def keywords(text: str) -> set[str]:
 
 
 def _stem(word: str) -> str:
-    for suffix in ("ing", "ed", "es", "s"):
+    """A light stemmer: "arranging", "arrangement" and "arrange" → "arrang"; "splitting" → "split"; "offices" → "offic"."""
+    for suffix in ("ments", "ment", "ings", "ing", "ed", "es", "s"):
         if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-            return word[: -len(suffix)]
+            word = word[: -len(suffix)]
+            break
+    if word.endswith("e") and len(word) > 3:
+        word = word[:-1]
+    if len(word) > 3 and word[-1] == word[-2] and word[-1] not in "aeiouls":
+        word = word[:-1]
     return word
 
 
@@ -258,22 +265,41 @@ def owner_matches(expected: str | None, got: str | None) -> bool:
     return all(any(_same_name(x, y) for y in long) for x in short)
 
 
-def item_matches(expected: dict[str, Any], got: dict[str, Any], min_overlap: float = 0.5) -> bool:
-    """Same owner, and at least ``min_overlap`` of the reference task's keywords in the summary's task."""
-    if not owner_matches(expected.get("owner"), got.get("owner")):
+def mentions(text: str, name: str) -> bool:
+    """``name``'s words appear in a row in ``text``, allowing the slips ``owner_matches`` allows ("Priya" said, "pria" heard)."""
+    want, words = normalize(name).split(), normalize(text).split()
+    return bool(want) and any(
+        all(_same_name(w, words[i + j]) for j, w in enumerate(want))
+        for i in range(len(words) - len(want) + 1)
+    )
+
+
+def item_matches(
+    expected: dict[str, Any],
+    got: dict[str, Any],
+    min_overlap: float = 0.5,
+    transcript: str | None = None,
+) -> bool:
+    """Same owner, and at least ``min_overlap`` of the reference task's keywords in the summary's task.
+
+    With the ``transcript``, an owner it never says is met by no owner: there's nothing to hear it from.
+    """
+    owner = expected.get("owner")
+    unheard = transcript is not None and owner and not mentions(transcript, owner)
+    if not (owner_matches(owner, got.get("owner")) or (unheard and not got.get("owner"))):
         return False
     want = keywords(expected["task"])
     return not want or len(want & keywords(got.get("task") or "")) / len(want) >= min_overlap
 
 
 def action_items(
-    expected: Sequence[dict[str, Any]], got: Sequence[dict[str, Any]]
+    expected: Sequence[dict[str, Any]], got: Sequence[dict[str, Any]], transcript: str | None = None
 ) -> tuple[float | None, float | None]:
     """(recall, precision) with one-to-one greedy matching; None where there's nothing to divide by."""
     unused = list(range(len(got)))
     matched = 0
     for e in expected:
-        hit = next((i for i in unused if item_matches(e, got[i])), None)
+        hit = next((i for i in unused if item_matches(e, got[i], transcript=transcript)), None)
         if hit is not None:
             unused.remove(hit)
             matched += 1

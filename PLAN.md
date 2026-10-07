@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v31 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v32 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v31: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring fixed (§4.9 *Private set*, item 5). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v32: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -128,6 +128,15 @@ Private action-item recall 0.283 → **0.383**; public 0.833 → **1.000** (Marc
 answerable). **Public decision recall 0.667 → 0.333** (not a gate metric): with the request in the transcript, the summary
 puts every point in `action_items` and returns no decisions (same transcript with the old wording: the Tacoma lease decision
 found, at temperature 0). A summary-prompt weakness the fixed fixture exposed; next: the summary prompt (item 5).
+
+**Changes in v32:** the **summary prompt** (§4.9 *Private set*, item 5): decisions are listed alongside action items (one that
+creates a task goes in both); tasks handed out as a list get one item per person; an arranged next meeting is an item; an owner
+can be a role when people are addressed by role; an unknown owner is `null`, and placeholder owners the model still writes
+(`someone`, `the team`) are set to `null` in code (`meetings.clean_owners`). Public decision recall 0.333 → **1.000**, action
+items 1.000; private action-item recall 0.383 → **0.467**, precision 0.475 → 0.542, decisions unchanged (0.455). **Measuring
+prompts:** at temperature 0 the output still depends on what the server ran before (prompt-cache reuse changes the numerics):
+the same prompt scored 0.467 or 0.383 by run order. Compare prompts each in a fresh server process; the eval's own order
+(questions, then summaries) is what the results files report.
 ---
 
 ## 1. Scope (v1)
@@ -1501,7 +1510,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 | Unanswerable declined | 1.000 | 1.000 | 1.000 | ≥ 0.80 | ✅ |
 | Guardian groundedness | 1.000 | 1.000 | 0.962 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
 | Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ cord-020's `.` thousands separator (4 fields), cord-004 subtotal |
-| Action-item recall | 0.283 | 0.283 | 0.283 | ≥ 0.80 | ❌ item 5 below; v31 scoring fix: **0.383** (the rest: the summaries) |
+| Action-item recall | 0.283 | 0.283 | 0.283 | ≥ 0.80 | ❌ item 5 below; v31 scoring fix 0.383, v32 summary prompt **0.467** |
 | WER | 0.178 | 0.178 | 0.178 | ≤ 0.10 | ❌ AMI room mix; number formatting (`110 clock`, `€1212.5` for a stuttered "twelve fifty") |
 
 **Triaged causes (read from the stored chunks and answers):**
@@ -1523,8 +1532,11 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
    watcher*), the next-meeting time missed, two "poll others" items folded into one. The keyword matcher is also strict: its
    stemmer doesn't map `splitting` → `split` or `arrangement` → `arrang`. The summary also writes `someone` for unnamed owners
    (the prompt asks for `null`). ~~Matcher stemming; owners the transcript never says~~ **fixed in v31** (0.383; one owner is a
-   guessed first name, one task matches only in meaning). Next: the summary prompt (one item per person, stated roles as owners,
-   `null` not `someone`, meeting times as items, decisions alongside action items); speaker diarization last.
+   guessed first name, one task matches only in meaning). ~~The summary prompt~~ **v32**: 0.467. Left (IB4003 1 / 3 of its 6,
+   ES2008b 3 / 5): owners given as first names where the reference has a role (likely the same person; nothing in the audio
+   says so), tasks that match only in meaning (no shared keywords), an ASR-garbled role ("market trend wa watching"). Prompt
+   wording alone is unlikely to reach 0.80 on two 35-minute room-mix meetings; open: a semantic matcher, more meetings, or
+   recalibrating the private threshold (with a reason, §4.9).
 
 #### Running and comparing
 

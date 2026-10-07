@@ -122,9 +122,15 @@ SUMMARY_SYSTEM = f"""You summarize meeting transcripts. Return ONLY a JSON objec
 
 Rules:
 - "summary": 2–4 sentences on what was discussed.
-- "decisions": things the participants agreed or decided. Empty list if none.
-- "action_items": every task someone was asked to do or committed to do. "owner" is the person's name as said in the
-  transcript (null if no one was named); "due" is the deadline in the transcript's own words (null if none).
+- "decisions": every conclusion the group reached: something agreed, chosen, approved or ruled out. A decision that also
+  creates a task goes in both lists. Empty list only if nothing was settled.
+- "action_items": one item per task per person. When tasks are handed out as a list ("Ana, you take the budget; Ben, the
+  schedule"), each person gets their own item with their own task. Include tasks someone was asked to do or committed to
+  do, and a next meeting that was arranged ("meet next Tuesday at two", owner null).
+- "owner": who will do the task, as the transcript calls them: a name, or a role when people are addressed by role
+  ("industrial designer, you have…"). If no one is named, owner is the JSON value null: never write "someone",
+  "everyone", "all", "team" or a description of a person.
+- "due": the deadline in the transcript's own words; null if none.
 - Use only what the transcript says. Don't invent owners, dates or tasks."""
 
 COMBINE_SYSTEM = f"""You merge partial summaries of consecutive sections of one meeting into a single summary.

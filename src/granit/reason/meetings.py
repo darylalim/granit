@@ -22,6 +22,34 @@ from granit.reason.prompts import (
 )
 from granit.reason.tokens import TokenCounter
 
+# Owners the model writes when no one was named; the prompt asks for null.
+PLACEHOLDER_OWNERS = frozenset(
+    {
+        "someone",
+        "somebody",
+        "anyone",
+        "everyone",
+        "everybody",
+        "all",
+        "team",
+        "the team",
+        "unknown",
+        "n/a",
+        "none",
+    }
+)
+
+
+def clean_owners(data: dict[str, Any]) -> dict[str, Any]:
+    """Placeholder owners ("someone", "the team") → null."""
+    for item in data.get("action_items", []):
+        if (
+            isinstance(item.get("owner"), str)
+            and item["owner"].strip().lower() in PLACEHOLDER_OWNERS
+        ):
+            item["owner"] = None
+    return data
+
 
 @dataclass
 class MeetingSummary:
@@ -51,7 +79,7 @@ def summarize(
             for i, section in enumerate(sections, 1)
         ]
         data, _ = llm.chat_json(combine_messages(partials), SUMMARY_SCHEMA)
-    return MeetingSummary(data, len(sections), round(time.perf_counter() - start, 2))
+    return MeetingSummary(clean_owners(data), len(sections), round(time.perf_counter() - start, 2))
 
 
 def summarize_source(store: Any, source: Any, llm: Any, counter: TokenCounter) -> MeetingSummary:

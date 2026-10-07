@@ -177,6 +177,49 @@ def test_action_items_match_owner_and_task_keywords() -> None:
     )
 
 
+def test_keywords_stem_word_forms() -> None:
+    # From the AMI triage: the same task worded as "splitting" / "split", "arrangement" / "arranging", "offices" / "office".
+    assert m.keywords("splitting the offices") == m.keywords("split an office")
+    assert (
+        m.keywords("arranging people")
+        == m.keywords("arrangement of people")
+        == m.keywords("arrange people")
+    )
+    assert m.keywords("planned passes") == {"plan", "pass"}
+
+
+def test_mentions_whole_names_in_order() -> None:
+    text = "Priya will check. Same as before, the project is late and the manager agreed."
+    assert m.mentions(text, "Priya") and m.mentions(
+        "so pria said", "Priya"
+    )  # a misheard name still counts
+    assert not m.mentions("the samples are late", "Sam")  # whole words, not inside "samples"
+    # Near-spellings count ("same" for "Sam"): erring towards "said" keeps the owner required, the strict side.
+    assert m.mentions(text, "Sam")
+    assert not m.mentions(text, "Project Manager")  # both words, but not together
+    assert m.mentions("as project manager I'll", "Project Manager")
+
+
+def test_owner_the_transcript_never_says_is_met_by_no_owner() -> None:
+    expected = [
+        {"owner": "Project Manager", "task": "post the minutes", "due": None},
+        {"owner": "Marcus", "task": "send the draft to legal", "due": None},
+    ]
+    got = [
+        {"owner": None, "task": "Post the meeting minutes", "due": None},
+        {"owner": None, "task": "send the draft to legal", "due": None},
+    ]
+    transcript = "Marcus, can you send the draft to legal? I'll post the minutes."
+    # A role nobody says can't be heard; a name that is said still has to be given.
+    assert m.action_items(expected, got, transcript) == (0.5, 0.5)
+    assert m.action_items(expected, got) == (0.0, 0.0)  # without the transcript, every owner counts
+    wrong = [{"owner": "Elena", "task": "post the minutes", "due": None}]
+    assert m.action_items(expected[:1], wrong, transcript) == (
+        0.0,
+        0.0,
+    )  # a guessed owner isn't met
+
+
 def test_cohens_kappa() -> None:
     assert m.cohens_kappa([True, False, True, False], [True, False, True, False]) == 1.0
     assert m.cohens_kappa([True, True, False, False], [True, False, True, False]) == 0.0

@@ -322,3 +322,59 @@ def test_sums_stay_out_of_the_prompt() -> None:
     prompt = vision.kvp_prompt(SUMS_SCHEMA)
     assert "x-sums" not in prompt and '"subtotal"' in prompt
     vision.check_schema(SUMS_SCHEMA)  # an extra keyword is still a valid JSON Schema
+
+
+# ── values checked against the text layer ──
+
+FORM = {
+    "type": "object",
+    "properties": {
+        "received_by": {"type": "string"},
+        "invoice_date": {"type": "string", "format": "date"},
+        "total": {"type": "string"},
+    },
+}
+TEXT = (
+    "Invoice date: 2026-09-05 · Due date: 2026-10-05\nReceived by Sam Okafor\nTotal due $3,275.00"
+)
+
+
+def test_ambiguous_dates_take_the_reading_the_text_has() -> None:
+    got = vision.resolve_against_text({"invoice_date": "09-05-2026"}, FORM, TEXT)
+    assert got == {"invoice_date": "2026-09-05"}
+    # both readings in the text, or neither: still ambiguous, never guessed
+    both = TEXT + "\nShipped 2026-05-09"
+    assert (
+        vision.resolve_against_text({"invoice_date": "09-05-2026"}, FORM, both)["invoice_date"]
+        == "09-05-2026"
+    )
+    assert (
+        vision.resolve_against_text({"invoice_date": "03-04-2026"}, FORM, TEXT)["invoice_date"]
+        == "03-04-2026"
+    )
+    assert (
+        vision.resolve_against_text({"invoice_date": "5 September 2026"}, FORM, TEXT)[
+            "invoice_date"
+        ]
+        == "5 September 2026"
+    )
+
+
+def test_misread_names_snap_to_the_text() -> None:
+    assert vision.resolve_against_text({"received_by": "Sam Okator"}, FORM, TEXT) == {
+        "received_by": "Sam Okafor"
+    }
+    assert vision.resolve_against_text({"received_by": "sam okafor"}, FORM, TEXT) == {
+        "received_by": "sam okafor"
+    }
+    assert vision.resolve_against_text({"received_by": "Priya Natarajan"}, FORM, TEXT) == {
+        "received_by": "Priya Natarajan"
+    }
+
+
+def test_numbers_and_missing_text_are_left_alone() -> None:
+    assert vision.resolve_against_text({"total": "$3,215.00"}, FORM, TEXT) == {"total": "$3,215.00"}
+    assert vision.resolve_against_text({"received_by": "Sam Okator"}, FORM, "") == {
+        "received_by": "Sam Okator"
+    }
+    assert vision.resolve_against_text({"received_by": None}, FORM, TEXT) == {"received_by": None}

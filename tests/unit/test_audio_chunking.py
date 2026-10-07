@@ -242,3 +242,32 @@ def test_transcript_json_round_trip() -> None:
 )
 def test_timestamp(seconds: float, text: str) -> None:
     assert audio.timestamp(seconds) == text
+
+
+def test_oclock_glued_to_the_hour_is_split_back() -> None:
+    # AMI IB4003: "about two o'clock" came out of TurboCTC as "about 20 clock", "eleven o'clock" as "110 clock".
+    words = [
+        Word("about", 0.0, 0.4),
+        Word("20", 0.5, 0.9),
+        Word("clock", 0.9, 1.3),
+        Word("then", 1.4, 1.6),
+    ]
+    fixed = audio.fix_oclock(words)
+    assert [w.text for w in fixed] == ["about", "2", "o'clock", "then"]
+    assert fixed[1] == Word("2", 0.5, 0.7) and fixed[2] == Word("o'clock", 0.7, 1.3)
+    assert [w.text for w in audio.fix_oclock([Word("110", 0, 1), Word("clock.", 1, 2)])] == [
+        "11",
+        "o'clock",
+    ]
+    assert [w.text for w in audio.fix_oclock([Word("100", 0, 1), Word("clock", 1, 2)])] == [
+        "10",
+        "o'clock",
+    ]
+
+
+def test_other_numbers_before_clock_stay() -> None:
+    for text in ("130", "200", "25", "7"):  # not an hour + 0
+        words = [Word(text, 0, 1), Word("clock", 1, 2)]
+        assert audio.fix_oclock(words) == words
+    assert audio.fix_oclock([Word("20", 0, 1), Word("clocks", 1, 2)])[0].text == "20"
+    assert audio.fix_oclock([Word("20", 0, 1)]) == [Word("20", 0, 1)]

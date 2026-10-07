@@ -14,6 +14,7 @@ The pure functions here need no models; ``AudioTranscriber`` imports MLX lazily 
 from __future__ import annotations
 
 import bisect
+import re
 import shutil
 import subprocess
 import tempfile
@@ -257,6 +258,30 @@ def stitch(
     return words
 
 
+_OCLOCK_HOUR = re.compile(r"(1[0-2]|[1-9])0")
+
+
+def fix_oclock(words: Sequence[Word]) -> list[Word]:
+    """TurboCTC writes "o'clock" as a 0 glued to the hour: "two o'clock" → ``20 clock``, "eleven" → ``110 clock``.
+
+    An hour (1–12) followed by 0, then the word "clock", is split back into the hour and "o'clock". The hour keeps the
+    first share of the number's time span, in proportion to its digits.
+    """
+    fixed: list[Word] = []
+    i = 0
+    while i < len(words):
+        word = words[i]
+        hour = _OCLOCK_HOUR.fullmatch(word.text)
+        if hour and i + 1 < len(words) and words[i + 1].text.lower().strip(".,?!") == "clock":
+            split = round(word.start + (word.end - word.start) * len(hour[1]) / len(word.text), 2)
+            fixed += [Word(hour[1], word.start, split), Word("o'clock", split, words[i + 1].end)]
+            i += 2
+        else:
+            fixed.append(word)
+            i += 1
+    return fixed
+
+
 # ── segments and transcript ──
 
 
@@ -377,7 +402,7 @@ class AudioTranscriber:
             duration_s=round(duration, 2),
             speech_s=round(sum(s.duration for s in raw), 2),
             chunks=len(chunks),
-            segments=tuple(segments_from_words(stitch(chunk_words), spans)),
+            segments=tuple(segments_from_words(fix_oclock(stitch(chunk_words)), spans)),
             model=f"{speech.repo_id}@{speech.revision}",
         )
 

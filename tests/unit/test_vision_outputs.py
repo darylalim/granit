@@ -251,3 +251,74 @@ def test_read_page_keeps_the_first_good_reading() -> None:
 )
 def test_html_header_depth(html: str, depth: int) -> None:
     assert vision.html_header_depth(html) == depth
+
+
+# ── x-sums: arithmetic checks on extracted amounts ──
+
+SUMS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        k: {"type": "string"}
+        for k in ("subtotal", "discount", "service_charge", "tax", "total", "cash_paid", "change")
+    },
+    "x-sums": [
+        {"total": "total", "parts": ["subtotal", "-discount", "service_charge", "tax"]},
+        {"total": "change", "parts": ["cash_paid", "-total"]},
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("text", "value"),
+    [
+        ("377,859", 377859.0),
+        ("377.859", 377859.0),  # Indonesian grouping
+        ("Rp 1.234.567", 1234567.0),
+        ("$1,234.56", 1234.56),
+        ("1.234,56", 1234.56),
+        ("12.5", 12.5),
+        ("-19,400", -19400.0),
+        ("n/a", None),
+    ],
+)
+def test_parse_amount(text: str, value: float | None) -> None:
+    assert vision.parse_amount(text) == value
+
+
+def test_sums_flag_a_misread_digit() -> None:
+    # CORD receipt cord-004: Vision read the subtotal 194,000 as 174,000.
+    read = {
+        "subtotal": "174,000",
+        "discount": "19,400",
+        "total": "174,600",
+        "cash_paid": "200,000",
+        "change": "25,400",
+    }
+    assert vision.check_sums(read, SUMS_SCHEMA) == [
+        "total: subtotal - discount = 154600, but total is 174,600"
+    ]
+    assert vision.check_sums({**read, "subtotal": "194,000"}, SUMS_SCHEMA) == []
+    _, errors, _ = vision.validate({**read, "tax": None}, SUMS_SCHEMA)
+    assert errors == ["total: subtotal - discount = 154600, but total is 174,600"]
+
+
+def test_sums_skip_rules_without_their_fields() -> None:
+    assert (
+        vision.check_sums(
+            {"total": "46,000", "cash_paid": "50,000", "change": "4,000"}, SUMS_SCHEMA
+        )
+        == []
+    )
+    assert vision.check_sums({"subtotal": "10"}, SUMS_SCHEMA) == []  # no total
+    assert (
+        vision.check_sums({"total": "10", "subtotal": "ten"}, SUMS_SCHEMA) == []
+    )  # unparseable: not judged
+    assert (
+        vision.check_sums({"total": "10"}, {"type": "object", "properties": {}}) == []
+    )  # no rules
+
+
+def test_sums_stay_out_of_the_prompt() -> None:
+    prompt = vision.kvp_prompt(SUMS_SCHEMA)
+    assert "x-sums" not in prompt and '"subtotal"' in prompt
+    vision.check_schema(SUMS_SCHEMA)  # an extra keyword is still a valid JSON Schema

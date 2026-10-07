@@ -78,6 +78,11 @@ RECEIPT_SCHEMA: dict[str, Any] = {
         "cash_paid": {"type": "string", "description": "Cash handed over, if paid in cash"},
         "change": {"type": "string", "description": "Change given back, if any"},
     },
+    # checked after extraction, never shown to the model (vision.check_sums)
+    "x-sums": [
+        {"total": "total", "parts": ["subtotal", "-discount", "service_charge", "tax"]},
+        {"total": "change", "parts": ["cash_paid", "-total"]},
+    ],
 }
 # schema field → CORD gt_parse (section, key); a field CORD doesn't label is expected to be missing (null)
 CORD_FIELDS = {

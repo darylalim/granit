@@ -237,11 +237,12 @@ def parse_json_object(text: str) -> dict[str, Any]:
 
 
 def kvp_prompt(schema: dict[str, Any]) -> str:
-    """The model card's VAREX prompt for schema-based key-value extraction."""
+    """The model card's VAREX prompt for schema-based key-value extraction (our ``x-`` keywords left out)."""
+    shown = {k: v for k, v in schema.items() if not k.startswith("x-")}
     return (
         "Extract structured data from this document.\n"
         "Return a JSON object matching this schema:\n\n"
-        f"{json.dumps(schema, indent=2)}\n\n"
+        f"{json.dumps(shown, indent=2)}\n\n"
         "Return null for fields you cannot find.\n"
         "Return ONLY valid JSON.\n"
         "Return an instance of the JSON with extracted values, not the schema itself."
@@ -348,12 +349,65 @@ def drop_nulls(value: Any, path: str = "") -> tuple[Any, list[str]]:
     return value, []
 
 
+def parse_amount(text: str) -> float | None:
+    """A printed amount → a number: ``377,859`` and ``377.859`` (grouping) → 377859; ``1.234,56`` / ``1,234.56`` → 1234.56.
+
+    With both separators the later one is the decimal point; with one kind, it's grouping when every group after it has
+    three digits, else the decimal point. None for text with no digits.
+    """
+    s = re.sub(r"[^\d.,-]", "", text)
+    if not re.search(r"\d", s):
+        return None
+    if "," in s and "." in s:
+        decimal = "," if s.rfind(",") > s.rfind(".") else "."
+        s = s.replace("." if decimal == "," else ",", "").replace(decimal, ".")
+    elif "," in s or "." in s:
+        sep = "," if "," in s else "."
+        head, *groups = s.split(sep)
+        s = (
+            head + "".join(groups)
+            if all(len(g) == 3 for g in groups)
+            else head + "." + "".join(groups)
+        )
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def check_sums(data: dict[str, Any], schema: dict[str, Any]) -> list[str]:
+    """Check the schema's ``x-sums`` rules: ``{"total": "total", "parts": ["subtotal", "-discount", "tax"]}``.
+
+    A rule is checked when its total and at least one part were found; a missing part counts as 0, a ``-`` part is
+    subtracted. A sum that's off by more than 0.01 is an error: a misread digit, flagged rather than returned as valid.
+    """
+    errors = []
+    for rule in schema.get("x-sums", []):
+        total = data.get(rule["total"])
+        terms = [(p[1:], -1.0) if p.startswith("-") else (p, 1.0) for p in rule["parts"]]
+        found = [(name, sign, data[name]) for name, sign in terms if data.get(name) is not None]
+        if total is None or not found:
+            continue
+        values = [parse_amount(str(v)) for _, _, v in found]
+        expected = parse_amount(str(total))
+        if expected is None or any(v is None for v in values):
+            continue
+        got = sum(sign * v for (_, sign, _), v in zip(found, values, strict=True) if v is not None)
+        if abs(got - expected) > 0.01:
+            parts = " ".join(
+                f"{'-' if sign < 0 else '+'} {name}" for name, sign, _ in found
+            ).lstrip("+ ")
+            errors.append(f"{rule['total']}: {parts} = {got:g}, but {rule['total']} is {total}")
+    return errors
+
+
 def validate(
     data: dict[str, Any], schema: dict[str, Any]
 ) -> tuple[dict[str, Any], list[str], list[str]]:
     """Validate extracted fields against the schema.
 
-    Dates in ``"format": "date"`` fields are normalized to ISO 8601 first, and formats are checked. Nulls are treated
+    Dates in ``"format": "date"`` fields are normalized to ISO 8601 first, and formats are checked; the schema's
+    ``x-sums`` rules are checked last (``check_sums``). Nulls are treated
     as "absent" (the prompt asks for null when a field isn't found), so a missing optional
     field is fine and a missing ``required`` one is an error. Returns (cleaned data, errors, missing paths).
     """
@@ -369,7 +423,7 @@ def validate(
             validator.iter_errors(cleaned), key=lambda e: list(map(str, e.absolute_path))
         )
     ]
-    return cleaned, errors, missing
+    return cleaned, errors + check_sums(cleaned, schema), missing
 
 
 def merge_pages(results: list[dict[str, Any]]) -> dict[str, Any]:

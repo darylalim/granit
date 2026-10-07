@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v32 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v33 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v32: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v33: M0–M7 done; Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -137,6 +137,13 @@ items 1.000; private action-item recall 0.383 → **0.467**, precision 0.475 →
 prompts:** at temperature 0 the output still depends on what the server ran before (prompt-cache reuse changes the numerics):
 the same prompt scored 0.467 or 0.383 by run order. Compare prompts each in a fresh server process; the eval's own order
 (questions, then summaries) is what the results files report.
+
+**Changes in v33:** private extraction triaged (§4.9 *Private set*, item 6): the receipts print commas, and Granite Vision
+**misreads digits** on faint or crumpled print (325,600 → `325.400`, 17,908 → `17.708`, 194,000 → `174,000`) and writes `.` for
+`,`. Its page reading makes the same misreads, so the page text can't correct them (v29's "every amount right" was wrong for
+cord-020), and a 2× / 3× upscale doesn't fix them reliably. A schema can now declare **sums** (`x-sums`, §3.6 *Form
+extraction*); a sum that doesn't add up marks the extraction invalid with the reason, instead of returning misread amounts as
+valid. Field accuracy is unchanged (0.857): the remaining gap is the model's reading.
 ---
 
 ## 1. Scope (v1)
@@ -625,7 +632,8 @@ of scope (licenses unchecked).
    it changes digits on clean receipts (325.400 → 325.600); a reading that still loops is dropped. A **looping page is cleared
    either way**, and a digital page Docling looped on is cleared and refilled by the text-layer safety net. Docling's items without
    provenance belong to the page before them in reading order. Cost: 3–6 s per receipt, ~45 s for a looping page (both attempts).
-   Measured: 5 / 5 receipts read with every amount right (cord-004, crumpled, also picks up handwriting behind it); the scan's
+   Measured: 4 / 5 receipts read with every amount right (cord-004, crumpled, also picks up handwriting behind it; v33: on
+   faint cord-020 two digits are misread, §4.9 *Private set*, item 6); the scan's
    subject, sender, recipients and comments, but not its date stamp.
 7. **Merged table headers (v30).** A table's leading header rows with spanning cells are merged with the leaf header row into one
    (`Median 1` over `2024` → `Median 1 / 2024`): from Docling's cell spans, or from Vision's HTML (`colspan` rows). A caption next to
@@ -643,13 +651,18 @@ of scope (licenses unchecked).
   a schema hint didn't help). For `"format": "date"` fields, unambiguous dates are normalized to ISO 8601 (day/month order only when a
   part is > 12; month names understood) and then **format-checked**: an ambiguous `03/04/2026` is kept and flagged, never guessed.
 - **PDFs:** up to 4 pages (`--pages`) are extracted page by page and merged field by field (first non-null wins).
+- **Sums (v33):** a schema may list arithmetic that must hold, `"x-sums": [{"total": "total", "parts": ["subtotal",
+  "-discount", "service_charge", "tax"]}]` (`-` subtracts; a missing part counts as 0; a rule needs its total and one part).
+  Amounts are parsed as printed (`377,859` = `377.859` = 377859; `1.234,56` = 1234.56). A sum off by more than 0.01 is an
+  error, so a misread digit makes the extraction invalid with the reason (`total: subtotal - discount = 154600, but total is
+  174,600`). `x-` keys are never shown to the model.
 
 **Measured in M3:** the card's chart → CSV exact (10/10 values), table 96/96 (Docling and Vision), invoice fields exact; the scanned
 2-page report: text, table and chart (4/4 values) exact, logo skipped; the digital memo exact; the generated invoice (PNG and PDF):
 all 6 fields exact with ISO dates, absent field reported missing. Docling ≈ 1.2–2.7 s per page; chart check + extraction ≈ 4.5–5.6 s.
 
 **Tests:** unit (`test_vision_outputs.py`, `test_documents.py`, no models: CSV / HTML / JSON parsing, the VAREX prompt, schema checks,
-null handling, required fields, date normalization + format checks, page merging, crop geometry, page rendering, chart data in Markdown);
+null handling, required fields, date normalization + format checks, `x-sums` and amount parsing, page merging, crop geometry, page rendering, chart data in Markdown);
 golden (`tests/models/test_documents.py`): the card's three examples plus the generated scanned report, digital memo and invoice.
 Fixtures: `scripts/make_document_fixtures.py` (Pillow + macOS Helvetica; the memo is printed by headless Chrome).
 
@@ -1509,7 +1522,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 | Fact coverage | 0.648 | 0.741 | 0.796 | ≥ 0.85 | ❌ tables (items 2–3 below); the scan's date stamp; spoken numbers |
 | Unanswerable declined | 1.000 | 1.000 | 1.000 | ≥ 0.80 | ✅ |
 | Guardian groundedness | 1.000 | 1.000 | 0.962 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
-| Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ cord-020's `.` thousands separator (4 fields), cord-004 subtotal |
+| Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ item 6 below: Vision misreads digits on faint print (both receipts now flagged invalid by `x-sums`) |
 | Action-item recall | 0.283 | 0.283 | 0.283 | ≥ 0.80 | ❌ item 5 below; v31 scoring fix 0.383, v32 summary prompt **0.467** |
 | WER | 0.178 | 0.178 | 0.178 | ≤ 0.10 | ❌ AMI room mix; number formatting (`110 clock`, `€1212.5` for a stuttered "twelve fifty") |
 
@@ -1537,6 +1550,12 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
    says so), tasks that match only in meaning (no shared keywords), an ASR-garbled role ("market trend wa watching"). Prompt
    wording alone is unlikely to reach 0.80 on two 35-minute room-mix meetings; open: a semantic matcher, more meetings, or
    recalibrating the private threshold (with a reason, §4.9).
+6. **Receipt amounts (v33 triage):** the receipts print commas. cord-020 (faint dot-matrix): Vision writes `.` for `,` in all
+   four amounts and misreads two digits (325,**6**00 → `325.400`, 17,**9**08 → `17.708`); cord-004 (crumpled): 1**9**4,000 →
+   `174,000`. The page-pass reading has the same misreads on cord-020; on cord-004 it reads 194,000, but `174,000` is one digit
+   from both 194,000 and 174,600, so a correction would be a guess. Upscaling (2× fixes cord-004, 3× doesn't; contrast is
+   unstable) is noise, not a fix. `x-sums` now flags both receipts (and none of the 3 correct ones or the references). Without a
+   better reader, field accuracy tops out near 0.89–0.94 (separators counted as wrong, like v28's rewritten dates).
 
 #### Running and comparing
 

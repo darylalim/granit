@@ -5,9 +5,10 @@
 Private, fully local document & meeting intelligence on Apple Silicon. IBM Granite models (speech, Docling,
 vision, 8B LLM, embeddings, reranker, Guardian) on MLX, with hybrid search, cited answers and a Streamlit UI.
 
-> **Status:** 1.1. All v1 milestones (M0–M7) are built: transcription, document conversion, form extraction,
+> **Status:** 1.2. All v1 milestones (M0–M7) are built: transcription, document conversion, form extraction,
 > hybrid search, cited answers, meeting summaries, the Streamlit app and the evaluation harness. 1.1 adds M8, the Guardian
-> verify job (`granit verify`, groundedness badges in Ask and Library). Both evaluation sets
+> verify job (`granit verify`, groundedness badges in Ask and Library). 1.2 adds M9, speakers: who spoke when, named by you
+> in the Library, so meeting summaries can give action items an owner (`granit speakers`). Both evaluation sets
 > pass the 1.0 quality criteria ([PLAN.md](PLAN.md) §4.9, with the private set's goals for 1.x). See PLAN.md for the full design.
 
 ## What it does (v1)
@@ -18,6 +19,8 @@ vision, 8B LLM, embeddings, reranker, Guardian) on MLX, with hybrid search, cite
 4. **Cross-source questions** over everything ingested.
 5. **Answer checks** (1.1): Granite Guardian checks whether answers are supported by their sources, and meeting summaries
    against requirements you write.
+6. **Speakers** (1.2): who spoke when in each recording. Name the speakers you recognize in the Library and meeting summaries
+   use the names for action-item owners; unnamed speakers stay unlabelled.
 
 Everything runs locally. The only network traffic is the one-time model download from Hugging Face.
 
@@ -41,7 +44,7 @@ Model weights are **not** part of this repository. They are downloaded from Hugg
 | Granite Embedding English R2 | Semantic search vectors | Apache-2.0 | [ibm-granite/granite-embedding-english-r2](https://huggingface.co/ibm-granite/granite-embedding-english-r2) |
 | Granite Embedding Reranker English R2 | Reranks search results | Apache-2.0 | [ibm-granite/granite-embedding-reranker-english-r2](https://huggingface.co/ibm-granite/granite-embedding-reranker-english-r2) |
 | Granite Guardian 4.1 8B | Judges answer groundedness / relevance (converted to 8-bit MLX locally) | Apache-2.0 | [ibm-granite/granite-guardian-4.1-8b](https://huggingface.co/ibm-granite/granite-guardian-4.1-8b) |
-| Nemotron 3 Diarization | Who spoke when (spike; downloaded only with `granit models download diarization-source`) | [OpenMDW-1.1](https://openmdw.ai/license/1-1/) | [nvidia/Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization) |
+| Nemotron 3 Diarization | Who spoke when (converted to fp32 MLX locally: `granit models download diarization-source`, then `granit models convert diarization`) | [OpenMDW-1.1](https://openmdw.ai/license/1-1/) | [nvidia/Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization) |
 
 ## License
 

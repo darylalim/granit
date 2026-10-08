@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v48 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v49 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v48: speech-model spike: no allowed model beats TurboCTC on the meetings; it stays (§3.5 *Stronger models*). v47: two fixes for mtg-01 tried and rejected (§4.9 *Private set*, item 4). v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v49: M10 planned: named speakers in search and Ask (§3.8; release 1.3.0). v48: speech-model spike: no allowed model beats TurboCTC on the meetings; it stays (§3.5 *Stronger models*). v47: two fixes for mtg-01 tried and rejected (§4.9 *Private set*, item 4). v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -227,6 +227,10 @@ against fresh-process baselines on the same libraries.
 leaderboard's AMI column were measured on the eval meetings with granit's decode, VAD chunks and WER normalization. Neither
 beats TurboCTC, which stays. The private WER gap is deleted words in overlapping speech (11–16 % of the reference for both
 models; substitutions ~3 %), so a larger model doesn't close it.
+
+**Changes in v49:** **M10 planned** (§3.8): user-named speakers reach search and Ask. A recording's chunks are built from turns
+when any speaker is named (`Priya: …`; unnamed turns plain, no names = today's chunks exactly), and naming queues a cheap
+`reindex` job that re-chunks and re-embeds that recording from its stored transcript. New public speaker questions; release 1.3.0.
 ---
 
 ## 1. Scope (v1)
@@ -941,7 +945,7 @@ fixture with Daniel + Samantha (told apart in every spike meeting), turn boundar
 internals pinned by this test (the module is new in 0.5.7).
 
 **Non-goals for M9:** recognizing a voice across recordings (needs speaker embeddings; no model approved), more than 8 speakers
-(the model's limit: extra voices merge), live diarization, speaker names in search or Ask.
+(the model's limit: extra voices merge), live diarization, speaker names in search or Ask (planned as M10, §3.8).
 
 **As built (M9, v44):**
 - **Model:** `LocalModel("diarization", builder="nemotron-diarization", q_bits=None)`; `models/convert.py` dispatches on `builder`
@@ -978,6 +982,64 @@ internals pinned by this test (the module is new in 0.5.7).
 - **Cost (`granit bench phase-a`, `bench/results/2026-10-08-3aa7013-phase-a.json`):** load 0.14 s; 112 s of audio in 0.17 s;
   footprint +1.4 GB at the speakers stage; Phase A peak **17.05 GB** (Docling stage, on top of cached buffers), 9.8 GB under the
   GPU limit.
+
+### 3.8 Speakers in search and Ask (M10, planned for 1.3)
+
+**Goal:** questions about who said what work in Ask and search: *"What did Priya agree to do?"*, *"What did the project manager
+say about the budget?"*. Today a recording's names reach only its summary (§3.7): chunks are plain segment text, so search can't
+match a name and the 8B model can't tell whose words a passage holds.
+
+**Rules (§3.7's, unchanged):** only user-named speakers are labelled; the model never maps `Speaker N` to a name; a recording
+with **no names gets today's chunks byte for byte** (so every unnamed recording, and the eval baseline, is untouched).
+
+**The design choice: names are set after ingest, chunks are built during it.** Options considered:
+
+| Option | Search finds "Priya" | Ask sees who spoke | Cost of naming | Verdict |
+|---|---|---|---|---|
+| **A. Re-chunk + re-embed on naming** (a `reindex` job) | ✅ BM25 and vectors | ✅ in the passage | seconds per recording + a Phase A switch | **chosen** |
+| B. Names only when results are shown (chunks unchanged) | ❌ | only if passages are re-rendered at prompt time | none | search can't match names |
+| C. Names in each chunk's `context` only, re-indexed | ✅ but every chunk of the recording gets every name | ❌ not who said which line | an FTS + vector refresh | misleading: a name on a chunk the person never spoke in |
+
+**Chunks (`store/chunking.chunk_transcript(transcript, names)`):** with names, chunks are packed from **turns** (`labelled_turns`,
+the summary's turn builder, §3.7) instead of segments: each line is `Priya: text` for a named speaker and plain `text` otherwise,
+packed to the same `TARGET_CHARS`; a turn longer than `MAX_CHARS` splits at a word. `start_s` / `end_s` come from the turns, so
+citations still point at the right minute. Without names, today's function runs unchanged (a unit test compares the output).
+
+**Reindex job (`reindex`, in `INGEST_TASKS`):** queued by `set_speaker_names` when the names change (the CLI, the Library's **Save
+names**, the eval). The worker reads the stored `transcript.json` and the names, re-chunks, re-embeds (the Embedding R2 model
+only: no Speech, Docling or Vision loads) and replaces the recording's chunks and vectors in one transaction via the same path as
+`complete_ingest` (bumps `corpus_version`). It runs with the next worker batch, like any ingest (a Phase A switch: Ask pauses
+for seconds; **Process now** runs it at once). A newer `reindex` for the same recording replaces a queued one. Old `qa_turns`
+keep their recorded answers; their cited chunk ids no longer resolve, as after a re-ingest today.
+
+**Ask (`reason/prompts.py`):** no prompt change needed for the passages (the names are in the text). One rule is added to
+`RAG_SYSTEM`, measured by A/B before it's kept: *"A line starting with a name is that person speaking."* (§3.7's evidence: the
+summary rule helped owners). The model still never sees `Speaker N`.
+
+**UI:** Library's **Save names** says *"Search will use these names after the next processing run"* and shows the queued job in
+the Ingest queue; nothing else changes (passages in Ask already show the chunk text).
+
+**Evaluation (§4.9):**
+- **Public:** 3–4 new questions in `make_eval_fixtures.py` whose answer is a speaker the simulated naming names (Sam in all three
+  meetings, Marcus in atlas-checkin, §3.7 *As built*), phrased so the name appears **only** as a speaker, never in the words
+  ("Who said they would send the revised quote?"). Category `speaker`; fact coverage reported per category. Regenerating the
+  fixtures changes every file's sha: `--fresh`.
+- **Private:** ES2008b's roles are named by the runner (word attribution 0.999); 2–3 questions taken from the AMI annotators'
+  action-item references, which name role owners ("The Industrial Designer will …"), so they stay written by others.
+- **Runner:** after simulated naming, the reindex runs before Phase B (it's queued by the same store call).
+- **Gate:** no regression on any existing question (`eval compare`, both sets); the speaker category is informational until it
+  has a first measured value. Before M10 the new questions are expected to fail (names aren't in chunks): run them once on main
+  first, so the gain is measured, not assumed.
+
+**Tests:** unit (no models): turn-packed chunks (named lines, unnamed plain, long-turn split, times); **no names = today's chunks
+exactly**; `set_speaker_names` queues one `reindex` (none when unchanged, replaces a queued one); the worker's reindex path with a
+fake embedder (chunks replaced, `corpus_version` bumped, no Speech/Docling/Vision loaded); BM25 finds a named speaker's chunk.
+Golden: none new (no new model).
+
+**Non-goals:** names in documents; recognizing a voice across recordings (§3.7); naming speakers automatically; search filters by
+speaker (possible later: the turns could be stored per chunk).
+
+**Effort:** 1–1½ days. **Version:** 1.3.0 (`uv version --bump minor`, §4.3), after both sets pass with no regressions.
 
 ## 4. Development toolchain
 
@@ -2006,8 +2068,9 @@ granit/
 | M7 | Evaluation (§4.9) | `granit eval` harness + metrics; public synthetic set (fixture script); private set (your ~30 questions, references); `granit eval label`; Guardian agreement check (50 verdicts, ≥ 85 %); first full run → calibrate thresholds; retrieval comparison (4 setups); **tables: Docling vs Vision on hard tables → decide `DOCUMENT_VISION_TABLES` by the §4.9 rule**; **1.0 gate: both sets pass** | 2½–3 days, then before every release |
 | M8 (v1.1) ✅ v40 | Verify job | Phase C in the phase manager, `verify` job type, `verdicts` table, criterion registry, custom summary criteria, verdict badges in Ask / Library | 1½ days |
 | M9 (v1.2) ✅ v44 | Speakers (§3.7) | Diarization model build (`granit models convert`) + Phase A step; `Word.speaker`; schema v4 `speaker_names`; turn lines + named-speaker rule in summaries; Library **Speakers** panel (samples, ▶, names) + named transcript; `granit speakers`; eval speaker references + simulated naming (80 % rule); golden test; Phase A re-measured | 2–2½ days |
+| M10 (v1.3) | Speakers in search (§3.8) | Turn-packed chunks with named speakers (no names = today's chunks); `reindex` job queued by naming (re-chunk + re-embed, embedder only); RAG speaker-line rule (A/B); Save names message; public speaker questions + private role questions from AMI references; measured on main first | 1–1½ days |
 
-About 13½–15½ days for v1, plus 1½ days for M8 (v1.1) and 2–2½ for M9 (v1.2). Every milestone ends with ruff + ty + unit tests passing.
+About 13½–15½ days for v1, plus 1½ days for M8 (v1.1), 2–2½ for M9 (v1.2) and 1–1½ for M10 (v1.3). Every milestone ends with ruff + ty + unit tests passing.
 
 ## 6. Risks
 
@@ -2090,4 +2153,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1) and 2–2½ for M9 (v
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
 | Speakers (v43) | **Nemotron 3 Diarization** (OpenMDW-1.1, fp32 MLX, Phase A) + **user-named speakers**; only named speakers' turns are labelled for the LLM; no cross-recording voice identity (§3.7) |
-| Next step | The private set's remaining goals (§4.9 *Private set*): v46 reached fact coverage; extraction, action items and WER remain |
+| Next step | **M10 speakers in search (§3.8)** → 1.3.0. Private goals: v46 reached fact coverage; extraction, action items and WER are model- or data-limited (v47, v48) |

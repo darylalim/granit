@@ -8,3 +8,22 @@ action_items:
   due: next Friday
 decisions:
 - Lease overflow storage space for Tacoma
+speakers:
+- name: Sam
+  start: 0.7
+  end: 6.25
+- name: Elena
+  start: 6.95
+  end: 13.21
+- name: Marcus
+  start: 13.91
+  end: 17.13
+- name: Sam
+  start: 17.83
+  end: 23.32
+- name: Elena
+  start: 24.02
+  end: 28.71
+- name: Sam
+  start: 29.41
+  end: 30.0

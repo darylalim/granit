@@ -230,3 +230,36 @@ def test_cohens_kappa() -> None:
 def test_mean_and_percentile() -> None:
     assert m.mean([1.0, None, 0.0]) == 0.5 and m.mean([None]) is None
     assert m.percentile([1.0, 2.0, 3.0, 4.0], 0.5) == 2.5 and m.percentile([], 0.9) is None
+
+
+# ── speakers (M9, PLAN.md §3.7) ──
+
+REFERENCE = [
+    {"name": "Elena", "start": 0.0, "end": 4.0},
+    {"name": "Priya", "start": 5.0, "end": 6.0},
+    {"name": "Elena", "start": 7.0, "end": 9.0},
+    {"name": "Marcus", "start": 10.0, "end": 12.0},
+]
+
+
+def test_reference_speaker_skips_silence_and_overlap() -> None:
+    assert m.reference_speaker(1.0, REFERENCE) == "Elena"
+    assert m.reference_speaker(6.2, REFERENCE) == "Priya"  # within the 0.3 s pad
+    assert m.reference_speaker(20.0, REFERENCE) is None
+    overlap = [*REFERENCE, {"name": "Sam", "start": 0.5, "end": 1.5}]
+    assert m.reference_speaker(1.0, overlap) is None
+
+
+def test_speakers_are_named_only_when_pure() -> None:
+    words = [
+        *[(t, t + 0.5, 1) for t in (0.0, 1.0, 2.0, 3.0, 7.0, 8.0)],  # Elena only
+        *[(t, t + 0.5, 2) for t in (5.0, 5.5)],  # Priya…
+        *[(t, t + 0.5, 2) for t in (10.0, 10.5, 11.0)],  # …and Marcus merged: 60 % Marcus
+        (30.0, 30.5, 3),  # nobody in the reference
+        (1.0, 1.5, None),
+    ]
+    assert m.speaker_naming(words, REFERENCE) == {1: "Elena"}
+    assert m.speaker_naming(words, REFERENCE, min_purity=0.5) == {1: "Elena", 2: "Marcus"}
+    # majority mapping: speaker 2 → Marcus, so Priya's 2 words are wrong: 9 of 11 words right
+    assert m.speaker_attribution(words, REFERENCE) == round(9 / 11, 4)
+    assert m.speaker_attribution([(30.0, 30.5, 1)], REFERENCE) is None

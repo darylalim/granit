@@ -308,6 +308,66 @@ def action_items(
     return recall, precision
 
 
+# ── speakers (PLAN.md §3.7) ──
+
+SPEAKER_PAD_S = 0.3  # reference turn edges are approximate (AAC priming, annotation timing)
+MIN_PURITY = 0.8  # a careful user names a speaker only when its samples are one person
+
+
+def reference_speaker(mid: float, reference: Sequence[dict[str, Any]]) -> str | None:
+    """Who the reference says was speaking at ``mid``; None for silence or overlapping speakers."""
+    names = {
+        r["name"]
+        for r in reference
+        if r["start"] - SPEAKER_PAD_S <= mid <= r["end"] + SPEAKER_PAD_S
+    }
+    return names.pop() if len(names) == 1 else None
+
+
+def speaker_votes(
+    words: Sequence[tuple[float, float, int | None]], reference: Sequence[dict[str, Any]]
+) -> list[tuple[int, str]]:
+    """(diarized speaker, reference name) for every word that has both."""
+    votes = []
+    for start, end, speaker in words:
+        if speaker is None:
+            continue
+        name = reference_speaker((start + end) / 2, reference)
+        if name is not None:
+            votes.append((speaker, name))
+    return votes
+
+
+def speaker_naming(
+    words: Sequence[tuple[float, float, int | None]],
+    reference: Sequence[dict[str, Any]],
+    min_purity: float = MIN_PURITY,
+) -> dict[int, str]:
+    """Simulated user naming: each speaker gets the reference name most of its words have, if ≥ ``min_purity`` do."""
+    from collections import Counter
+
+    by_speaker: dict[int, Counter[str]] = {}
+    for speaker, name in speaker_votes(words, reference):
+        by_speaker.setdefault(speaker, Counter())[name] += 1
+    names = {}
+    for speaker, counts in by_speaker.items():
+        name, n = counts.most_common(1)[0]
+        if n / sum(counts.values()) >= min_purity:
+            names[speaker] = name
+    return names
+
+
+def speaker_attribution(
+    words: Sequence[tuple[float, float, int | None]], reference: Sequence[dict[str, Any]]
+) -> float | None:
+    """Share of words on the right speaker, mapping each speaker to its majority reference name."""
+    votes = speaker_votes(words, reference)
+    if not votes:
+        return None
+    majority = speaker_naming(words, reference, min_purity=0.0)
+    return round(sum(majority.get(s) == n for s, n in votes) / len(votes), 4)
+
+
 # ── agreement and aggregation ──
 
 

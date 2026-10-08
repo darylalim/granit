@@ -8,3 +8,28 @@ action_items:
   due: end of the month
 decisions:
 - Renew the Northbeam fleet tracking contract for two years
+speakers:
+- name: Elena
+  start: 0.7
+  end: 5.06
+- name: Priya
+  start: 5.76
+  end: 13.69
+- name: Sam
+  start: 14.39
+  end: 20.05
+- name: Elena
+  start: 20.75
+  end: 23.15
+- name: Elena
+  start: 23.85
+  end: 27.29
+- name: Priya
+  start: 27.99
+  end: 28.47
+- name: Elena
+  start: 29.17
+  end: 33.79
+- name: Sam
+  start: 34.49
+  end: 36.05

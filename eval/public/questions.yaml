@@ -5,7 +5,7 @@
   expected_facts:
   - $12,640.00
   gold_refs:
-  - source_sha256: 773eeffa126497fc89e2a787cf00bc1b8975fc25e51ba13808206967ced00c13
+  - source_sha256: 40fb6be6ac85b6c55e67e0dc5492dd51c2815d8fea5094ac21c7ce4371c2dc0b
     file: files/invoices/inv-01.pdf
     page: 1
 - id: doc-02
@@ -14,7 +14,7 @@
   expected_facts:
   - '2026-08-25'
   gold_refs:
-  - source_sha256: c3532f747f3a02d2fe5b6a00d7e4820819036cd0cef8e06926ee7a9d370bd748
+  - source_sha256: c0d79fda2330c192c5cf6e03cc351426d140351246279240efd5f22f97a72125
     file: files/invoices/inv-02.pdf
     page: 1
 - id: doc-03
@@ -23,7 +23,7 @@
   expected_facts:
   - PO-48390
   gold_refs:
-  - source_sha256: 734c05e6935b929ddbba14fc2caa16862b5174efbd8bfc949f5b12884736ff18
+  - source_sha256: 2389caa4b48d8970a502496928f0a28c975520116c07a5f2187557c954aefa39
     file: files/invoices/inv-03.pdf
     page: 1
 - id: doc-04
@@ -32,7 +32,7 @@
   expected_facts:
   - $2,500.00
   gold_refs:
-  - source_sha256: 833e906b98b93c191f57f924da02f7f041fd131b7cb0046faebd23df48d06b36
+  - source_sha256: 9b46c5b18904e71b9f27d9d106a93978ff39ff083ea2626f2f3c68e73c26dca1
     file: files/invoices/inv-04.pdf
     page: 1
 - id: doc-05
@@ -41,7 +41,7 @@
   expected_facts:
   - $6,912.50
   gold_refs:
-  - source_sha256: 902c8f74a84862fdec1ae35c1c3719c16dbb72d0c0a78673bf194526b377347f
+  - source_sha256: f4b03bae57260b569e903f0c2d85152651df9f4a96752a1fa4f69d58b178bf28
     file: files/invoices/inv-05.pdf
     page: 1
 - id: doc-06
@@ -50,7 +50,7 @@
   expected_facts:
   - '150'
   gold_refs:
-  - source_sha256: f59691a10d5993773d85cbc15f93102be92629ac30848e36f1d7d04bb3b1765a
+  - source_sha256: da419038d9e01a3f3e8af239854eb70fb537d8d959b88a826f09bfc645f659a1
     file: files/invoices/inv-06.pdf
     page: 1
 - id: doc-07
@@ -59,7 +59,7 @@
   expected_facts:
   - 94.2%
   gold_refs:
-  - source_sha256: dff480d8d0a78b443c041723ddf74d4a85dc0fa4b79a636ba4922fda460364bb
+  - source_sha256: 95f4c50d74d0b5fb9629631072bc4197ab4e096592fb8cf089e1b80d6339c1cd
     file: files/reports/ops-review-q3.pdf
     page: 1
 - id: doc-08
@@ -68,7 +68,7 @@
   expected_facts:
   - 3,410
   gold_refs:
-  - source_sha256: dff480d8d0a78b443c041723ddf74d4a85dc0fa4b79a636ba4922fda460364bb
+  - source_sha256: 95f4c50d74d0b5fb9629631072bc4197ab4e096592fb8cf089e1b80d6339c1cd
     file: files/reports/ops-review-q3.pdf
     page: 2
 - id: doc-09
@@ -77,7 +77,7 @@
   expected_facts:
   - $95
   gold_refs:
-  - source_sha256: cb365ba89923240e721a3b95344bcf2a776b9ad1de6406c68ae2c63932fecbdf
+  - source_sha256: ce5f4dcbfe4c41c12756e576e2969132baceb87029cedc99eacfb0fb86a1d2cb
     file: files/reports/travel-policy.pdf
     page: 1
 - id: doc-10
@@ -86,7 +86,7 @@
   expected_facts:
   - 30 days
   gold_refs:
-  - source_sha256: cb365ba89923240e721a3b95344bcf2a776b9ad1de6406c68ae2c63932fecbdf
+  - source_sha256: ce5f4dcbfe4c41c12756e576e2969132baceb87029cedc99eacfb0fb86a1d2cb
     file: files/reports/travel-policy.pdf
     page: 2
 - id: doc-11
@@ -95,7 +95,7 @@
   expected_facts:
   - $410,000
   gold_refs:
-  - source_sha256: 383088d0b80f7e3492a5a680b5633ed85b7605513994e11b8a94063edd5b5531
+  - source_sha256: 3bf689652592da189cba32e8307626666f3ca40357f0ce001195a82ba66fbf8a
     file: files/reports/atlas-status.pdf
     page: 1
 - id: doc-12
@@ -104,7 +104,7 @@
   expected_facts:
   - Priya Raman
   gold_refs:
-  - source_sha256: c1201f7c360679b092f8c7bfd6854966f8d8bf21aba433bf3af3dfa80a602443
+  - source_sha256: c80a2d8070a3c0693cf90a53b9116cdb23ed27121f1fb9991a1153319bf9a025
     file: files/forms/po-01.pdf
     page: 1
 - id: doc-13
@@ -113,7 +113,7 @@
   expected_facts:
   - HFP-TRK-9917342
   gold_refs:
-  - source_sha256: 22e7f9f0b1045278e6a52f3a21a57e50db924310f0a857c325c85a09ab939409
+  - source_sha256: 29ab1a51c56729194bc341fbdec721526505894e4e9bd82fe70c13e8c46ec43a
     file: files/forms/dn-01.pdf
     page: 1
 - id: doc-14
@@ -122,7 +122,7 @@
   expected_facts:
   - $1,486.20
   gold_refs:
-  - source_sha256: cf26834b5456c83e5b67471f945afacd5954a7d4d537c955582745614aaa4aa3
+  - source_sha256: 64947fa99aaf03319c76e26a2141bf374fc3786026ee4376084c63fa10a939d1
     file: files/forms/exp-01.pdf
     page: 1
 - id: doc-15
@@ -131,7 +131,7 @@
   expected_facts:
   - '571'
   gold_refs:
-  - source_sha256: cedaf402e54b5562e04b91e40fcfa1a393c198f3fb0ebf134cef87cac0dde8c0
+  - source_sha256: 67276951474908204dae649677c86c26f1265ab3a21350ad8e1043d0246bfb0c
     file: files/tables/dense-numeric.pdf
     page: 1
 - id: mtg-01
@@ -141,7 +141,7 @@
   - Priya
   - Thursday
   gold_refs:
-  - source_sha256: 0b7e059d5164f748bb09e9f38f808210154fa23559a847c5a37babd24c779f45
+  - source_sha256: f00743cfea1f5d563f4d11fd193b72b142e172c91cc165052c0aa513ace016a8
     file: files/meetings/vendor-review.m4a
     start_s: 22.85
     end_s: 29.47
@@ -151,7 +151,7 @@
   expected_facts:
   - two years | 2 years | 2-year | two-year
   gold_refs:
-  - source_sha256: 0b7e059d5164f748bb09e9f38f808210154fa23559a847c5a37babd24c779f45
+  - source_sha256: f00743cfea1f5d563f4d11fd193b72b142e172c91cc165052c0aa513ace016a8
     file: files/meetings/vendor-review.m4a
     start_s: 19.75
     end_s: 24.15
@@ -161,7 +161,7 @@
   expected_facts:
   - 9% | nine percent | 9 percent
   gold_refs:
-  - source_sha256: 0b7e059d5164f748bb09e9f38f808210154fa23559a847c5a37babd24c779f45
+  - source_sha256: f00743cfea1f5d563f4d11fd193b72b142e172c91cc165052c0aa513ace016a8
     file: files/meetings/vendor-review.m4a
     start_s: 13.39
     end_s: 21.05
@@ -172,7 +172,7 @@
   - Marcus
   - Monday
   gold_refs:
-  - source_sha256: 3f4e7fbc43e943160497942d85af727b2b3b6cf289f1c5c4abef00ac83ed95b4
+  - source_sha256: 15d47d0c14e2eebb7a87344ce047eaaf8a164502270c37b83ecec08a27d78e18
     file: files/meetings/peak-season.m4a
     start_s: 5.95
     end_s: 18.13
@@ -182,7 +182,7 @@
   expected_facts:
   - 87% | eighty seven percent | eighty-seven percent | 87 percent
   gold_refs:
-  - source_sha256: 3f4e7fbc43e943160497942d85af727b2b3b6cf289f1c5c4abef00ac83ed95b4
+  - source_sha256: 15d47d0c14e2eebb7a87344ce047eaaf8a164502270c37b83ecec08a27d78e18
     file: files/meetings/peak-season.m4a
     start_s: 16.83
     end_s: 24.32
@@ -192,7 +192,7 @@
   expected_facts:
   - November 3 | November third | 2026-11-03 | Nov 3
   gold_refs:
-  - source_sha256: 4f7a3c39a6d5d391e59e3ea2711503eb9bb9bf4b015736e3a6e08bfc52016014
+  - source_sha256: 1a1bbafa0a84af615d12b2233a4fc4bf3427c260e2ea121e1316d81d6779f6f7
     file: files/meetings/atlas-checkin.m4a
     start_s: 2.13
     end_s: 7.92
@@ -202,7 +202,7 @@
   expected_facts:
   - Sam
   gold_refs:
-  - source_sha256: 4f7a3c39a6d5d391e59e3ea2711503eb9bb9bf4b015736e3a6e08bfc52016014
+  - source_sha256: 1a1bbafa0a84af615d12b2233a4fc4bf3427c260e2ea121e1316d81d6779f6f7
     file: files/meetings/atlas-checkin.m4a
     start_s: 12.99
     end_s: 18.64
@@ -213,11 +213,11 @@
   - 16,500 | sixteen thousand five hundred
   - $18,000.00
   gold_refs:
-  - source_sha256: 0b7e059d5164f748bb09e9f38f808210154fa23559a847c5a37babd24c779f45
+  - source_sha256: f00743cfea1f5d563f4d11fd193b72b142e172c91cc165052c0aa513ace016a8
     file: files/meetings/vendor-review.m4a
     start_s: 4.76
     end_s: 14.69
-  - source_sha256: f59691a10d5993773d85cbc15f93102be92629ac30848e36f1d7d04bb3b1765a
+  - source_sha256: da419038d9e01a3f3e8af239854eb70fb537d8d959b88a826f09bfc645f659a1
     file: files/invoices/inv-06.pdf
     page: 1
 - id: x-02
@@ -226,10 +226,10 @@
   expected_facts:
   - November 3 | November third | 2026-11-03 | Nov 3
   gold_refs:
-  - source_sha256: 383088d0b80f7e3492a5a680b5633ed85b7605513994e11b8a94063edd5b5531
+  - source_sha256: 3bf689652592da189cba32e8307626666f3ca40357f0ce001195a82ba66fbf8a
     file: files/reports/atlas-status.pdf
     page: 1
-  - source_sha256: 4f7a3c39a6d5d391e59e3ea2711503eb9bb9bf4b015736e3a6e08bfc52016014
+  - source_sha256: 1a1bbafa0a84af615d12b2233a4fc4bf3427c260e2ea121e1316d81d6779f6f7
     file: files/meetings/atlas-checkin.m4a
     start_s: 2.13
     end_s: 7.92
@@ -240,10 +240,10 @@
   - 25 | twenty five | twenty-five
   - November 15 | November fifteenth | 2026-11-15 | Nov 15
   gold_refs:
-  - source_sha256: dff480d8d0a78b443c041723ddf74d4a85dc0fa4b79a636ba4922fda460364bb
+  - source_sha256: 95f4c50d74d0b5fb9629631072bc4197ab4e096592fb8cf089e1b80d6339c1cd
     file: files/reports/ops-review-q3.pdf
     page: 3
-  - source_sha256: 3f4e7fbc43e943160497942d85af727b2b3b6cf289f1c5c4abef00ac83ed95b4
+  - source_sha256: 15d47d0c14e2eebb7a87344ce047eaaf8a164502270c37b83ecec08a27d78e18
     file: files/meetings/peak-season.m4a
     start_s: 5.95
     end_s: 14.21
@@ -254,10 +254,10 @@
   - Harbor Freight Partners
   - $22,750.00
   gold_refs:
-  - source_sha256: 22e7f9f0b1045278e6a52f3a21a57e50db924310f0a857c325c85a09ab939409
+  - source_sha256: 29ab1a51c56729194bc341fbdec721526505894e4e9bd82fe70c13e8c46ec43a
     file: files/forms/dn-01.pdf
     page: 1
-  - source_sha256: 833e906b98b93c191f57f924da02f7f041fd131b7cb0046faebd23df48d06b36
+  - source_sha256: 9b46c5b18904e71b9f27d9d106a93978ff39ff083ea2626f2f3c68e73c26dca1
     file: files/invoices/inv-04.pdf
     page: 1
 - id: none-01

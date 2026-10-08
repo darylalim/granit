@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing, Phase A 17.1 GB; release 1.2.0 is a separate version-bump PR). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB; release 1.2.0 is a separate version-bump PR). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -207,7 +207,8 @@ the way a careful user would (a speaker is named only when ≥ 80 % of its words
 **Changes in v44 (M9):** the **speakers** step is built (§3.7 *As built*): fp32 diarization build, `Word.speaker`, schema v4
 `speaker_names`, named turns in summaries (unnamed: today's prompt, byte for byte), the Library's Speakers panel, `granit speakers`,
 eval speaker references + simulated naming. Public set (`--fresh`): every quality metric unchanged, still passing; the 80 % rule
-left both merged `say` speakers unnamed. Phase A peaks at **17.1 GB** (was 15.6).
+left both merged `say` speakers unnamed. Private set: passes, action items **0.467 → 0.567** (ES2008b 0.6 → 0.8 with its four
+roles named). Phase A peaks at **17.1 GB** (was 15.6).
 ---
 
 ## 1. Scope (v1)
@@ -925,6 +926,13 @@ internals pinned by this test (the module is new in 0.5.7).
   to the previous run (action items 1.000 / 1.000, decisions 1.000); word attribution 0.830, 4 of 7 speakers named: Sam (all three
   meetings) and Marcus (atlas-checkin); the merged Elena + Priya and Elena + Marcus speakers stayed unnamed, so `peak-season` kept
   Marcus's task (the spike's 1.0 → 0.5 failure doesn't recur).
+- **Private set (2026-10-08, `data/eval/results/2026-10-08-0b57d11-private.json`, after re-running `fetch_real_eval.py`):**
+  passes; ES2008b's four speakers all named with their roles at ≥ 80 % purity (word attribution 0.999); **action items
+  0.467 → 0.567** (precision 0.575 → 0.750): ES2008b 0.6 → **0.8**, as in the spike; IB4003 (no roles, no names) 0.333.
+  `eval compare` flagged two drops, neither from M9: **extraction.invalid 0 → 2** is the receipt sums check (`x-sums`, v33)
+  reaching the private schemas with the re-fetch (cord-004 and cord-020, the two receipts with misread amounts, now flagged;
+  field accuracy unchanged), and **decision recall 0.455 → 0.364** is one ES2008b decision lost to the server's prompt-cache
+  order: in fresh processes ES2008b gets 5 / 8 decisions with or without names (twice with names), and 0.8 vs 0.6 action items.
 - **Cost (`granit bench phase-a`, `bench/results/2026-10-08-3aa7013-phase-a.json`):** load 0.14 s; 112 s of audio in 0.17 s;
   footprint +1.4 GB at the speakers stage; Phase A peak **17.05 GB** (Docling stage, on top of cached buffers), 9.8 GB under the
   GPU limit.

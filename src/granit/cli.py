@@ -253,13 +253,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _transcribe(args: argparse.Namespace) -> int:
-    from granit.ingest.audio import AudioError, AudioTranscriber, timestamp
+    from granit.ingest.audio import AudioError, AudioTranscriber, decode, timestamp
+    from granit.ingest.speakers import Diarizer, speaker_count, speaker_label, turns
 
     transcriber = AudioTranscriber().load()  # models load once for every file
+    diarizer = Diarizer().load() if Diarizer.available() else None
     failed = 0
     for path in args.files:
         try:
-            transcript = transcriber.transcribe(path)
+            audio = decode(path)
+            transcript = transcriber.transcribe_audio(audio)
+            if diarizer is not None:
+                transcript = diarizer.label(transcript, audio)
         except (AudioError, FileNotFoundError) as exc:
             print(f"✗ {path}: {exc}", file=sys.stderr)
             failed += 1
@@ -268,9 +273,14 @@ def _transcribe(args: argparse.Namespace) -> int:
             f"── {path.name}: {timestamp(transcript.duration_s)} long, "
             f"{transcript.speech_s:.0f} s speech / {transcript.silence_s:.0f} s silence, "
             f"{len(transcript.segments)} segments"
+            + (f", {speaker_count(transcript)} speakers" if diarizer is not None else "")
         )
-        for segment in transcript.segments:
-            print(f"[{timestamp(segment.start)}] {segment.text}")
+        if diarizer is not None:
+            for turn in turns(transcript.segments):
+                print(f"[{timestamp(turn.start)}] {speaker_label(turn.speaker, {})}: {turn.text}")
+        else:
+            for segment in transcript.segments:
+                print(f"[{timestamp(segment.start)}] {segment.text}")
         if args.json:
             args.json.mkdir(parents=True, exist_ok=True)
             out = args.json / f"{path.stem}.transcript.json"

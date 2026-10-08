@@ -74,6 +74,7 @@ def worker(store: Store, **kw: Any) -> IngestWorker:
         documents=kw.get("documents", FakeDocuments()),
         embedder=FakeEmbedder(),
         mlx_cache_limit_gb=None,
+        diarizer=kw.get("diarizer"),  # never the real model in unit tests
     )
 
 
@@ -191,3 +192,44 @@ def test_jobs_left_running_are_recovered(store: Store) -> None:
     logs: list[str] = []
     report = worker(store).run(log=logs.append)
     assert len(report.done) == 1 and "re-queued 1 job" in logs[0]
+
+
+class FakeDiarizer:
+    """Speaker 1 says the first two words, speaker 2 the rest."""
+
+    def __init__(self) -> None:
+        self.audio_lengths: list[int] = []
+
+    def label(self, transcript: Transcript, audio: Any) -> Transcript:
+        from granit.ingest.speakers import with_speakers
+
+        self.audio_lengths.append(len(audio))
+        n = sum(len(s.words) for s in transcript.segments)
+        return with_speakers(transcript, [1, 1] + [2] * (n - 2))
+
+
+def test_recordings_get_speakers_when_a_diarizer_is_loaded(store: Store) -> None:
+    store.set_vocabulary(["Northbeam"])
+    audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
+    diarizer = FakeDiarizer()
+    assert (
+        not worker(store, transcriber=WordsTranscriber(), diarizer=diarizer).run(log=print).failed
+    )
+    audio = store.source(audio.id)
+    assert audio.info["speakers"] == 2
+    assert diarizer.audio_lengths and diarizer.audio_lengths[0] > 0  # the decoded recording
+    saved = Transcript.from_json(
+        json.loads((store.derived_dir(audio) / "transcript.json").read_text())
+    )
+    # vocabulary first ("north beam" → one word), then speakers per word
+    assert [(w.text, w.speaker) for w in saved.segments[0].words] == [
+        ("renew", 1),
+        ("Northbeam", 1),
+        ("today.", 2),
+    ]
+
+
+def test_without_a_diarizer_recordings_have_no_speakers(store: Store) -> None:
+    audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
+    assert not worker(store).run(log=lambda _: None).failed
+    assert "speakers" not in store.source(audio.id).info

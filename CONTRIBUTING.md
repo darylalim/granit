@@ -5,10 +5,11 @@
 Requirements: an Apple Silicon Mac (32 GB recommended), macOS 26, [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync                              # creates .venv with uv-managed Python 3.12
-uv run granit models download        # ~20 GB of pinned model weights into ~/.cache/huggingface
-uv run granit models convert --delete-source   # Guardian 4.1 8B → local 8-bit MLX (needs ~17 GB temporarily)
-uv run granit models smoke           # load each model once and run a known-answer check
+uv sync                                     # creates .venv with uv-managed Python 3.12
+uv run granit models download               # ~20 GB of pinned runtime weights into ~/.cache/huggingface
+uv run granit models download guardian-source diarization-source   # ~17 GB of sources for the local builds
+uv run granit models convert --delete-source   # Guardian → 8-bit MLX, diarization → fp32 MLX in models/; then deletes the sources
+uv run granit models smoke                  # load each model once and run a known-answer check
 ```
 
 Use `uv add` / `uv remove` for dependencies. Don't use pip and don't edit `uv.lock` by hand.

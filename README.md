@@ -6,7 +6,7 @@ Private, fully local document & meeting intelligence on Apple Silicon. IBM Grani
 vision, 8B LLM, embeddings, reranker, Guardian) on MLX, with hybrid search, cited answers and a Streamlit UI.
 
 > **Status:** 1.0. All v1 milestones (M0–M7) are built: transcription, document conversion, form extraction,
-> hybrid search, cited answers, meeting summaries, the Streamlit app and the evaluation harness. Both evaluation sets
+> hybrid search, cited answers, meeting summaries, the Streamlit app and the evaluation harness; M8 (the Guardian verify job, for 1.1) is built. Both evaluation sets
 > pass the 1.0 quality criteria ([PLAN.md](PLAN.md) §4.9, with the private set's goals for 1.x). See PLAN.md for the full design.
 
 ## What it does (v1)
@@ -15,6 +15,8 @@ vision, 8B LLM, embeddings, reranker, Guardian) on MLX, with hybrid search, cite
 2. **Document Q&A**: PDFs and scans → Markdown with accurate tables and chart data → answers with citations.
 3. **Form / invoice extraction**: document image + JSON Schema → validated JSON.
 4. **Cross-source questions** over everything ingested.
+5. **Answer checks** (1.1): Granite Guardian checks whether answers are supported by their sources, and meeting summaries
+   against requirements you write.
 
 Everything runs locally. The only network traffic is the one-time model download from Hugging Face.
 

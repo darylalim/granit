@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from granit.config import GUARDIAN_CONTEXT_TOKENS, INGEST_MLX_CACHE_LIMIT_GB
-from granit.verify.guardian import CRITERIA, judge_messages, parse_score, passed
+from granit.verify.guardian import CRITERIA, fit_prompt, judge_messages, parse_score, passed
 
 MAX_TOKENS = 24  # no-think: empty <think></think> then <score>…</score>
 PROMPT_BUDGET = GUARDIAN_CONTEXT_TOKENS - 512
@@ -31,16 +31,7 @@ def prompt_for(tokenizer: Any, criterion: str, item: dict[str, Any]) -> str:
     """The chat-templated prompt; documents only for groundedness, dropped from the end until the prompt fits."""
     messages = judge_messages(criterion, item["question"], item["answer"])
     documents = list(item.get("documents") or []) if criterion == "groundedness" else []
-    while True:
-        kwargs: dict[str, Any] = {}
-        if documents:
-            kwargs["documents"] = [{"doc_id": str(i), "text": t} for i, t in enumerate(documents)]
-        prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, **kwargs
-        )
-        if not documents or len(tokenizer.encode(prompt)) <= PROMPT_BUDGET:
-            return prompt
-        documents.pop()
+    return fit_prompt(tokenizer, messages, documents, PROMPT_BUDGET)
 
 
 def judge(

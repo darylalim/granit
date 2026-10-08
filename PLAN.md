@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v40: M8 verify job built (§2.4 *As built*; release 1.1.0 is a separate version-bump PR). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -182,6 +182,14 @@ the public set. Both sets pass.
 **Changes in v39:** **1.0.0**: both eval sets pass the 1.0 criteria (§4.9), so the version goes 0.1.0.dev0 → 1.0.0
 (`uv version --bump major`); the merge to `main` publishes the release (§4.3). Next (1.x): the private goals (§4.9 *Pass
 criteria*), then M8, the verify job (v1.1).
+
+**Changes in v40 (M8):** the **verify job** is built (§2.4 *As built*): `verify` jobs (no source; schema v3 rebuilds `jobs`
+with foreign keys off so `extractions.job_id` survives), the `verdicts` table, the criterion registry (`verify/criteria.py`),
+the Phase C worker (`verify/worker.py`, `granit verify`), Phase C in the phase manager (shares a switch with ingest: ingest
+first, then verify, then Q&A restarts once), **Check answers** on Ask, summary checks (editable) in Library. Real-data run on a
+copy of the private library: 164 verdicts in 634 s (~7.8 s per answer), peak 11.0 GB. **Badges show groundedness only:**
+answer relevance failed 18 of 81 real answers, several of them short correct ones ("24% [3]"), and only groundedness passed the
+M7 agreement check, so relevance verdicts are recorded but not shown until they're validated.
 ---
 
 ## 1. Scope (v1)
@@ -425,6 +433,30 @@ in one transaction per batch, exit, and restart Q&A. Verdicts appear as badges i
 |---|---|
 | `qa_turns` | question, answer, cited `chunk_ids`, LLM model + revision, retrieval config (BM25/hybrid/rerank flags), **`retrieval_trace`** (JSON: per-stage chunk IDs + scores for BM25, vectors, RRF, rerank; §4.9), latency, created_at (**v1**: also gives the Ask page persistent history) |
 | `verdicts` | target (turn / summary / extraction id), `criterion_id`, raw `yes/no/error`, `yes_means`, derived `passed`, mode (think/no-think), Guardian model + revision, created_at |
+
+**As built (M8, v40):**
+- **Jobs:** `Store.enqueue_verify()` queues one `verify` job (no source; a second request while one is queued returns it).
+  Each worker claims only its own tasks (`claim_next(tasks=…)`; ingest = `INGEST_TASKS`). Schema v3 rebuilt `jobs` (SQLite
+  can't alter a `CHECK`): `migrate()` turns foreign keys off around migrations and runs `foreign_key_check` before each commit.
+- **Verdicts:** two nullable foreign keys, `turn_id` → `qa_turns` and `extraction_id` → `extractions`, both `ON DELETE
+  CASCADE` (deleting a source or replacing a summary removes its verdicts); unique per target and criterion. An error
+  (`score` NULL, `error` text: unparseable reply, or the answer's passages were deleted) is never a pass and isn't retried.
+  Recording verdicts doesn't bump `corpus_version` (Q&A doesn't reload vectors).
+- **What's judged:** answers that weren't declined, on groundedness (against the passages the model read, heading context
+  included, dropped from the end to fit 7.7K tokens) and answer relevance (question + answer only); meeting summaries on the
+  library's custom criteria, judged on the summary as text ("- (no owner): Book the venue"). Custom criteria are edited in
+  Library (default: *"Every action item names the person responsible for it."*); a criterion's id is a hash of its text, so
+  an edited criterion is a new one. Summary groundedness against the transcript isn't checked: an hour of transcript exceeds
+  Guardian's 8K context.
+- **Phase C:** `python -m granit.verify.worker` in its own process; Guardian loads only if there's something to judge.
+  Ask's **Check answers** and Library's **Check with Guardian** queue the job; it runs with the next batch (a minute without
+  questions, or **Process now**), after any ingest jobs in the same switch. `granit verify` runs it from the terminal (it
+  refuses while Q&A or ingest runs).
+- **Badges:** ✅ Grounded / ⚠️ Unsupported claims / ❓ check failed under each answer; met / not met per summary check.
+  Relevance is stored, not shown: it hasn't had an agreement check, and on the private library it failed short correct
+  answers. Known groundedness miss: an answer citing with full-width brackets (`【3】`, private doc-03) is judged ungrounded,
+  as in M7.
+- **Cost:** ~7.8 s per answer (groundedness ~9 s at 3K tokens, M1; relevance ~1 s), ~1 s per summary check; peak 11.0 GB.
 
 ## 3. Models and variants (32 GB, M2 Max ≈ 400 GB/s)
 
@@ -1734,7 +1766,7 @@ granit/
 | M5 | Reasoning + phases | `mlx_lm.server` manager, **phase manager**; RAG, meeting summary and cross-source prompts; JSON-output tests; record `qa_turns` | 2 days |
 | M6 | Streamlit UI | Ingest (upload + queue + "Process now" + **"Accurate tables (slower)"** per upload, §3.6), Library, Ask (chat + citations + phase banner), Extract (schema editor); **theme + semantic color map (§4.7)**, **adaptive layout + `safe_md()` (§4.8)**, screenshot check of every page at 760 / 1512 / 2560 px in light and dark | 2–2½ days |
 | M7 | Evaluation (§4.9) | `granit eval` harness + metrics; public synthetic set (fixture script); private set (your ~30 questions, references); `granit eval label`; Guardian agreement check (50 verdicts, ≥ 85 %); first full run → calibrate thresholds; retrieval comparison (4 setups); **tables: Docling vs Vision on hard tables → decide `DOCUMENT_VISION_TABLES` by the §4.9 rule**; **1.0 gate: both sets pass** | 2½–3 days, then before every release |
-| M8 (v1.1) | Verify job | Phase C in the phase manager, `verify` job type, `verdicts` table, criterion registry, custom summary criteria, verdict badges in Ask / Library | 1½ days |
+| M8 (v1.1) ✅ v40 | Verify job | Phase C in the phase manager, `verify` job type, `verdicts` table, criterion registry, custom summary criteria, verdict badges in Ask / Library | 1½ days |
 
 About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends with ruff + ty + unit tests passing.
 

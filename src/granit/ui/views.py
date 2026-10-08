@@ -10,12 +10,105 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from granit.ingest.audio import parse_terms, timestamp
 from granit.search.hybrid import Hit, hit_from_row
 from granit.store.db import AUDIO_EXTENSIONS, DOCUMENT_EXTENSIONS, Source, Store, kind_of
 from granit.ui.layout import safe_md
+from granit.verify.criteria import TURN_CRITERIA, summary_criteria
+
+# ── verdicts (Phase C, PLAN.md §2.4) ──
+
+
+CheckColor = Literal["green", "orange", "gray"]
+
+
+@dataclass
+class Check:
+    """A Guardian verdict as a badge: status colors only (PLAN.md §4.7): green pass, orange fail, gray error."""
+
+    label: str
+    color: CheckColor
+    icon: str
+    help: str
+
+
+CHECK_ICONS: dict[CheckColor, str] = {
+    "green": ":material/check_circle:",
+    "orange": ":material/warning:",
+    "gray": ":material/help:",
+}
+# Shown on answers: groundedness only. It passed the M7 agreement check (0.92 vs hand labels, PLAN.md §4.9); answer
+# relevance is recorded but not shown: unvalidated, it fails short correct answers ("24% [3]") as "omitting key details".
+SHOWN_TURN_CHECK = ("groundedness", "Grounded", "Unsupported claims")
+
+
+def check(label: str, passed: bool | None, help_text: str) -> Check:
+    color: CheckColor = "gray" if passed is None else "green" if passed else "orange"
+    return Check(label, color, CHECK_ICONS[color], help_text)
+
+
+def turn_checks(rows: list[Any]) -> list[Check]:
+    """An answer's badge: ✅ grounded / ⚠️ unsupported claims / ❓ check failed; none until it's been checked."""
+    criterion, ok, bad = SHOWN_TURN_CHECK
+    row = next((r for r in rows if r["criterion_id"] == criterion), None)
+    if row is None:
+        return []
+    if row["passed"] is None:
+        return [
+            check(f"{ok}: check failed", None, row["error"] or "Guardian's reply had no score.")
+        ]
+    passed = bool(row["passed"])
+    return [
+        check(ok if passed else bad, passed, f"Granite Guardian, {stamp(row['created_at'])} UTC")
+    ]
+
+
+def attach_checks(store: Store, turns: list[ChatTurn]) -> None:
+    """Refresh each turn's badges from ``verdicts`` (a verify job may have run since the page loaded them)."""
+    ids = [t.turn_id for t in turns if t.turn_id is not None]
+    found = store.verdicts(turn_ids=ids)
+    for t in turns:
+        if t.turn_id is not None:
+            t.checks = turn_checks(found.get(("turn", t.turn_id), []))
+
+
+def unchecked_answers(store: Store) -> int:
+    return len(store.turns_to_verify([c.id for c in TURN_CRITERIA]))
+
+
+def summary_checks(store: Store, extraction_id: int) -> list[dict[str, Any]]:
+    """The summary's checks against the library's current criteria: one row per criterion, unchecked ones included."""
+    rows = {
+        r["criterion_id"]: r
+        for r in store.verdicts(extraction_ids=[extraction_id]).get(
+            ("extraction", extraction_id), []
+        )
+    }
+    out = []
+    for c in summary_criteria(store):
+        row = rows.get(c.id)
+        if row is None:
+            result = "not checked yet"
+        elif row["passed"] is None:
+            result = f"check failed: {row['error'] or 'no score'}"
+        else:
+            result = "met" if row["passed"] else "not met"
+        out.append({"Check": c.text, "Result": result})
+    return out
+
+
+def summary_criteria_text(store: Store) -> str:
+    return "\n".join(c.text for c in summary_criteria(store))
+
+
+def save_summary_criteria(store: Store, text: str) -> list[str]:
+    """The Library's checks box → the library's summary criteria (one per line; blank lines dropped)."""
+    texts = [" ".join(line.split()) for line in text.splitlines() if line.strip()]
+    store.set_summary_criteria(texts)
+    return texts
+
 
 # ── conversation ──
 
@@ -40,6 +133,9 @@ class ChatTurn:
     thinking: str | None = None
     reasoning: str = ""
     turn_id: int | None = None
+    checks: list[Check] = field(
+        default_factory=list
+    )  # Guardian verdicts (empty until a verify job ran)
 
     @property
     def cited(self) -> list[SourceRef]:
@@ -168,7 +264,7 @@ def library_rows(sources: list[Source]) -> list[dict[str, Any]]:
     ]
 
 
-TASK_LABEL = {"ingest": "Ingest", "extract": "Extract fields"}
+TASK_LABEL = {"ingest": "Ingest", "extract": "Extract fields", "verify": "Check with Guardian"}
 
 
 def job_rows(rows: list[Any]) -> list[dict[str, Any]]:
@@ -181,7 +277,7 @@ def job_rows(rows: list[Any]) -> list[dict[str, Any]]:
         out.append(
             {
                 "id": r["id"],
-                "File": r["source_name"],
+                "File": r["source_name"] or "Answers and summaries",
                 "Task": task,
                 "Status": r["status"],
                 "Attempts": r["attempts"],

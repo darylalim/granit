@@ -87,7 +87,7 @@ class IngestWorker:
         # immediate replay of a deterministic failure: that could be minutes of Vision time while Q&A is paused).
         failed_this_run: list[int] = []
         while (job := self.store.claim_next(exclude=failed_this_run)) is not None:
-            source = self.store.source(job.source_id)
+            source = self.store.source(job.source)
             job_start = time.perf_counter()
             try:
                 summary = self.process(job)
@@ -114,7 +114,7 @@ class IngestWorker:
         raise ValueError(f"unknown task {job.task!r}")
 
     def _ingest(self, job: Job) -> str:
-        source = self.store.source(job.source_id)
+        source = self.store.source(job.source)
         path, out = self.store.file_path(source), self.store.derived_dir(source)
         out.mkdir(parents=True, exist_ok=True)
         extractions: list[NewExtraction] = []
@@ -160,7 +160,7 @@ class IngestWorker:
     def _extract(self, job: Job) -> str:
         from granit.ingest.documents import check_format, render_pages, text_layer_lines
 
-        source = self.store.source(job.source_id)
+        source = self.store.source(job.source)
         path = self.store.file_path(source)
         check_format(path)
         schema = job.params["schema"]

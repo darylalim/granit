@@ -2,7 +2,8 @@
 
 Layout: a 720 px conversation with the chat input under it, and a 380 px sources panel beside it on wide windows (below on
 narrow ones). Answers stream in; thinking ("low" by default) is folded into a compact "Thought for N s" toggle. A question
-asked while Q&A is paused is kept and asked as soon as Q&A is back.
+asked while Q&A is paused is kept and asked as soon as Q&A is back. "Check answers" queues a Guardian verify job (Phase C);
+its verdicts appear as badges under each answer (PLAN.md §2.4).
 """
 
 import time
@@ -14,10 +15,21 @@ from streamlit.delta_generator import DeltaGenerator
 from granit.models.phases import PhaseBusy
 from granit.ui.layout import READING_WIDTH, answer_md, reading_with_side_panel, safe_md
 from granit.ui.session import backend, open_store
-from granit.ui.views import ChatTurn, SourceRef, turn_from_answer, turns_from_history
+from granit.ui.views import (
+    ChatTurn,
+    SourceRef,
+    attach_checks,
+    turn_from_answer,
+    turns_from_history,
+    unchecked_answers,
+)
 
 USER = ":material/person:"  # neutral avatars: Streamlit's default red / orange read as error / warning (§4.7)
 ASSISTANT = ":material/neurology:"
+CHECK_HELP = (
+    "Granite Guardian checks whether each answer is supported by the passages it was based on (about 8 s per answer)."
+    " It runs with the next batch: after a minute without questions, or now with **Process now** on the Ingest page."
+)
 THINKING_HELP = (
     "How much the model reasons before answering. **Low** (default) is quick and keeps answers short; "
     "**off** tends to ramble; **on** can use its whole budget thinking."
@@ -27,6 +39,7 @@ store = open_store()
 if "ask_turns" not in st.session_state:
     st.session_state.ask_turns = turns_from_history(store, limit=10)
 turns: list[ChatTurn] = st.session_state.ask_turns
+attach_checks(store, turns)
 selected = st.session_state.get("ask_selected")
 if selected is None or selected >= len(turns):
     selected = len(turns) - 1
@@ -57,6 +70,10 @@ def show_turn(i: int, turn: ChatTurn) -> None:
         st.markdown(answer_md(turn.answer))
         if turn.cited:
             citation_badges(turn.cited)
+        if turn.checks:
+            with st.container(horizontal=True, gap="xsmall"):
+                for c in turn.checks:
+                    st.badge(safe_md(c.label), color=c.color, icon=c.icon, help=safe_md(c.help))
         with st.container(horizontal=True, vertical_alignment="center", gap="small"):
             if turn.seconds is not None:
                 st.caption(f"{turn.seconds:.1f} s")
@@ -122,6 +139,19 @@ with conversation:
             help=THINKING_HELP,
         )
         st.space("stretch")
+        unchecked = unchecked_answers(store)
+        if st.button(
+            "Check answers",
+            type="tertiary",
+            icon=":material/fact_check:",
+            disabled=not unchecked,
+            help=CHECK_HELP,
+        ):
+            store.enqueue_verify()
+            st.toast(
+                f"Guardian will check {unchecked} answer{'s' * (unchecked != 1)} with the next batch.",
+                icon=":material/fact_check:",
+            )
         st.button(
             "New conversation",
             type="tertiary",

@@ -6,8 +6,10 @@
   when the user asks (``process_now()``, which still waits for an in-flight answer), the manager stops the server and waits for
   it to exit (freeing its memory), runs the ingest worker **as its own process** to drain the whole queue in one batch, then
   **always** restarts the server, health-checks it and sends a warm-up request (``try/finally``).
+- **Verify (Phase C, M8):** a queued ``verify`` job switches the same way and runs ``python -m granit.verify.worker``
+  (Guardian). When ingest and verify jobs are both waiting they share one switch: ingest first (its new answers' sources
+  are in place), then verify, then Q&A restarts once. Each worker exits before the next starts.
 - Questions during a switch get ``PhaseBusy`` with a message for the UI banner ("Q&A paused: ingesting 3 files").
-- Phase C (Guardian verify, v1.1) will be another batch kind on the same mechanism.
 
 M1 measured B→A 7.6–8.9 s and A→B 6.5–6.7 s.
 """
@@ -26,6 +28,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from granit.store.db import INGEST_TASKS
+
 IDLE_BEFORE_INGEST_S = 60.0
 
 
@@ -34,6 +38,7 @@ class Phase(StrEnum):
     QA = "qa"
     SWITCHING = "switching"
     INGEST = "ingest"
+    VERIFY = "verify"
 
 
 class PhaseBusy(RuntimeError):
@@ -53,10 +58,23 @@ class PhaseStatus:
     last_switch: dict[str, Any] = field(default_factory=dict)
 
 
+Worker = Callable[[Path, Callable[[str], None]], dict[str, Any]]
+
+
 def run_worker_process(data_dir: Path, log: Callable[[str], None]) -> dict[str, Any]:
-    """Run ``python -m granit.ingest.worker`` and return its RESULT. Progress lines are passed to ``log`` as they arrive."""
+    """Run ``python -m granit.ingest.worker`` (Phase A) and return its RESULT."""
+    return run_module("granit.ingest.worker", data_dir, log)
+
+
+def run_verify_process(data_dir: Path, log: Callable[[str], None]) -> dict[str, Any]:
+    """Run ``python -m granit.verify.worker`` (Phase C, Guardian) and return its RESULT."""
+    return run_module("granit.verify.worker", data_dir, log)
+
+
+def run_module(module: str, data_dir: Path, log: Callable[[str], None]) -> dict[str, Any]:
+    """Run a worker module in its own process and return its RESULT. Progress lines go to ``log`` as they arrive."""
     proc = subprocess.Popen(
-        [sys.executable, "-m", "granit.ingest.worker", "--data", str(data_dir)],
+        [sys.executable, "-m", module, "--data", str(data_dir)],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -74,7 +92,7 @@ def run_worker_process(data_dir: Path, log: Callable[[str], None]) -> dict[str, 
             tail = [*tail[-20:], line]
     code = proc.wait()
     if code != 0 or result is None:
-        raise WorkerFailed(f"ingest worker exited with code {code}: " + " | ".join(tail[-3:]))
+        raise WorkerFailed(f"{module} exited with code {code}: " + " | ".join(tail[-3:]))
     return result
 
 
@@ -83,7 +101,8 @@ class PhaseManager:
         self,
         store: Any,
         server_factory: Callable[[], Any] | None = None,
-        run_worker: Callable[[Path, Callable[[str], None]], dict[str, Any]] = run_worker_process,
+        run_worker: Worker = run_worker_process,
+        run_verifier: Worker = run_verify_process,
         idle_before_ingest_s: float = IDLE_BEFORE_INGEST_S,
         clock: Callable[[], float] = time.monotonic,
         log: Callable[[str], None] = lambda _: None,
@@ -91,6 +110,7 @@ class PhaseManager:
         self.store = store
         self._server_factory = server_factory or self._default_server
         self._run_worker = run_worker
+        self._run_verifier = run_verifier
         self.idle_before_ingest_s = idle_before_ingest_s
         self._clock = clock
         self._log = log
@@ -180,7 +200,7 @@ class PhaseManager:
                 self._last_activity = self._clock()
                 self._cond.notify_all()
 
-    # ingest batches
+    # batches (ingest, then verify)
 
     def status(self) -> PhaseStatus:
         with self._cond:
@@ -203,35 +223,47 @@ class PhaseManager:
 
     def tick(self) -> dict[str, Any] | None:
         """Called periodically (UI loop): run a batch if jobs are waiting and Q&A has been idle long enough."""
-        return self._ingest(wait_for_chats=False) if self.should_ingest() else None
+        return self._batch(wait_for_chats=False) if self.should_ingest() else None
 
     def process_now(self, timeout: float = 300) -> dict[str, Any] | None:
         """ "Process now": run the queued jobs as soon as any answer in progress has finished."""
-        return self._ingest(wait_for_chats=True, timeout=timeout)
+        return self._batch(wait_for_chats=True, timeout=timeout)
 
-    def _ingest(self, wait_for_chats: bool, timeout: float = 300) -> dict[str, Any] | None:
+    def _batch(self, wait_for_chats: bool, timeout: float = 300) -> dict[str, Any] | None:
+        """Stop Q&A, run the ingest worker and/or the verify worker, restart Q&A. Returns the ingest worker's RESULT
+        (with the verify worker's under ``"verify"``), or None if a worker failed or nothing ran."""
         with self._cond:
             if wait_for_chats:
                 self._cond.wait_for(lambda: self._active == 0, timeout=timeout)
             if self._phase is not Phase.QA or self._active or not self.store.queued_count():
                 return None
             queued = self.store.queued_count()
-            self._set(Phase.SWITCHING, f"Q&A paused: ingesting {queued} file{'s' * (queued != 1)}")
+            ingest = self.store.queued_count(INGEST_TASKS)
+            self._set(Phase.SWITCHING, _paused_message(ingest))
         timings: dict[str, Any] = {"queued": queued}
         result: dict[str, Any] | None = None
         try:
             start = time.perf_counter()
-            self._server.stop()  # waits for the process to exit: its memory is free before Phase A loads
+            self._server.stop()  # waits for the process to exit: its memory is free before Phase A or C loads
             self._server = None
             timings["stop_s"] = round(time.perf_counter() - start, 2)
-            with self._cond:
-                self._set(Phase.INGEST, self._message)
-            start = time.perf_counter()
-            result = self._run_worker(Path(self.store.root), self._log)
-            timings["ingest_s"] = round(time.perf_counter() - start, 2)
-        except Exception as exc:  # the worker crashed: record it; Q&A comes back regardless
+            if ingest:
+                with self._cond:
+                    self._set(Phase.INGEST, self._message)
+                start = time.perf_counter()
+                result = self._run_worker(Path(self.store.root), self._log)
+                timings["ingest_s"] = round(time.perf_counter() - start, 2)
+            if self.store.queued_count(("verify",)):
+                with self._cond:
+                    self._set(Phase.VERIFY, _paused_message(0))
+                start = time.perf_counter()
+                verified = self._run_verifier(Path(self.store.root), self._log)
+                timings["verify_s"] = round(time.perf_counter() - start, 2)
+                result = {**(result or {}), "verify": verified}
+        except Exception as exc:  # a worker crashed: record it; Q&A comes back regardless
             timings["error"] = f"{type(exc).__name__}: {exc}"
-            self._log(f"ingest batch failed: {timings['error']}")
+            self._log(f"batch failed: {timings['error']}")
+            result = None
         finally:
             with self._cond:
                 self._set(Phase.SWITCHING, "Restarting Q&A…")
@@ -244,3 +276,9 @@ class PhaseManager:
     def _set(self, phase: Phase, message: str) -> None:
         self._phase, self._message = phase, message
         self._cond.notify_all()
+
+
+def _paused_message(ingest: int) -> str:
+    if ingest:
+        return f"Q&A paused: ingesting {ingest} file{'s' * (ingest != 1)}"
+    return "Q&A paused: Guardian is checking answers and summaries"

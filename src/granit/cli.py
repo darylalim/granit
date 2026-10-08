@@ -173,6 +173,13 @@ def build_parser() -> argparse.ArgumentParser:
     meeting.add_argument("--data", type=Path, help=data_help)
     meeting.set_defaults(func=_meeting)
 
+    verify = commands.add_parser(
+        "verify",
+        help="check answers and meeting summaries with Granite Guardian (Phase C)",
+    )
+    verify.add_argument("--data", type=Path, help=data_help)
+    verify.set_defaults(func=_verify)
+
     ui = commands.add_parser(
         "ui", help="open the app in your browser (Ingest, Library, Ask, Extract)"
     )
@@ -357,6 +364,7 @@ def _store(args: argparse.Namespace) -> Any:
 
 def _ingest(args: argparse.Namespace) -> int:
     from granit.ingest.worker import IngestWorker
+    from granit.store.db import INGEST_TASKS
 
     store = _store(args)
     for path in args.files:
@@ -368,12 +376,40 @@ def _ingest(args: argparse.Namespace) -> int:
         print(
             f"{'+ queued' if created else '= already in the library'}: {source.name} (#{source.id})"
         )
-    if not store.queued_count():
+    if not store.queued_count(INGEST_TASKS):
         print("nothing to process")
         return 0
     report = IngestWorker(store).run()
     print(
         f"── {len(report.done)} done, {len(report.failed)} failed in {report.seconds:.1f} s "
+        f"(peak memory {report.peak_footprint_gb:.1f} GB)"
+    )
+    return 1 if report.failed else 0
+
+
+def _verify(args: argparse.Namespace) -> int:
+    import subprocess
+
+    from granit.verify.worker import VerifyWorker
+
+    busy = subprocess.run(
+        [
+            "pgrep",
+            "-fl",
+            r"mlx_lm[. ]server|granit\.models\.mlx_server|granit\.ingest\.worker|granit (ingest|ui)",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if busy.returncode == 0:
+        raise SystemExit(
+            "another phase is running (Q&A or ingest); stop it first: Guardian and the Q&A model don't fit together"
+        )
+    store = _store(args)
+    store.enqueue_verify()
+    report = VerifyWorker(store).run(log=lambda line: print(line, flush=True))
+    print(
+        f"── {report.verdicts} verdicts in {report.seconds:.1f} s "
         f"(peak memory {report.peak_footprint_gb:.1f} GB)"
     )
     return 1 if report.failed else 0

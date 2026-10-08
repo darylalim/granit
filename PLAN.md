@@ -1273,7 +1273,7 @@ CI:   lint ─► test ─► release
         run: |
           PRE=""; [[ "$VERSION" =~ (a|b|rc|dev)[0-9]+ ]] && PRE="--prerelease"
           gh release create "v$VERSION" dist/* \
-            --target "$GITHUB_SHA" --title "granit v$VERSION" --generate-notes $PRE
+            --target "$GITHUB_SHA" --generate-notes $PRE
 ```
 
 **Design rules**

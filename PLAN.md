@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned for a spike (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike step 1 (who spoke when) measured (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -691,6 +691,31 @@ clause); no terms on outputs. It also makes the user responsible for clearing th
 "licensed under agreement" (David AI), which is usual for open weights. NVIDIA's `model.safetensors` is in transformers layout, so the
 pin downloads only the `.nemo` archive (~0.2 GB) and mlx-audio's converter builds the MLX weights locally (PyTorch, already pinned).
 The spike measures speaker turns on the private meetings against the transcript segments, to name action-item owners (§4.9 item 2).
+
+**Spike, step 1 (2026-10-08): who spoke when.** fp32 MLX build (397 MB, converted in seconds), `offline` preset, threshold 0.5,
+scored after the best speaker mapping (10 ms frames, no collar; *attribution* = share of lines or words whose dominant predicted
+speaker is the right one):
+
+| Meeting | Speakers (true / found) | DER | Miss / FA / confusion | Attribution | Speed, peak memory |
+|---|---|---|---|---|---|
+| AMI ES2008b (37 min, room mix) | 4 / 4 | 0.181 | 0.160 / 0.016 / **0.005** | **0.942** of 5,956 words | 3.4 s (655× real time), 1.27 GB |
+| AMI IB4003 (34 min) | 4 / 4 | 0.178 | 0.150 / 0.025 / **0.003** | **0.893** of 6,614 words | 2.9 s, 1.26 GB |
+| public vendor-review (37 s, `say` voices) | 3 / 2 | 0.292 | 0 / 0.015 / 0.276 | 0.750 of 8 lines | < 1 s, 0.89 GB |
+| public peak-season (31 s) | 3 / 2 | 0.138 | 0 / 0.013 / 0.124 | 0.833 of 6 lines | |
+| public atlas-checkin (25 s) | 4 / 3 | 0.294 | 0 / 0.016 / 0.278 | 0.833 of 6 lines | |
+
+- **AMI was in its training data** (ES2008 is AMI train, IB4003 dev), so these two rows show the pipeline works on real audio, not
+  generalization. The card's held-out **AMI test** result (offline, forced-alignment references): **DER 9.25 %**, speaker count right
+  in 87.5 % of meetings. Most of the misses here are words the manual annotations time as speech where the model hears none
+  (overlaps, backchannels); confusion, which is what names an owner, stays under 1 %.
+- **The synthetic meetings are the hard case:** boundaries are exact (within ~0.1 s) and the model is confident, but it merges
+  similar `say` voices (Samantha + Karen in two meetings, Rishi + Samantha in one) with only seconds of speech per speaker and one
+  TTS engine behind all of them. Real meetings don't look like this; the public set isn't a good diarization check.
+- **Cost is negligible:** ~1.3 GB and seconds per hour of audio, so it fits Phase A next to Speech + Docling + Vision (15.6 GB).
+
+**Step 2 (next):** speaker labels on transcript segments → the meeting summary. Diarization gives *Speaker 1–4*, not names, so
+owners need the summary prompt to resolve labels from how people address each other ("Priya, please send…" → "Will do."), or the user
+to name speakers in the Library.
 
 ### 3.6 Documents: Docling + Granite Vision (built in M3)
 

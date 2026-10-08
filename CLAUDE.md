@@ -50,6 +50,12 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **Prompt A/B:** run each variant in its own fresh process (`cli._llm_server()` + patched prompt): `mlx_lm.server`'s prompt cache makes temperature-0 output depend on earlier requests (same prompt 0.467 vs 0.383 by order).
 - **Stacked PRs:** `gh pr merge --delete-branch` on the base closes the PR stacked on it (no retarget). Base PRs on `main`, or merge `main` into the stacked branch and open a new PR.
 - **Model tests after long eval runs:** the answer-latency checks (`MAX_ANSWER_S`) can fail under load; re-run `tests/models/test_reasoning.py` alone before suspecting the change.
+- **Speakers (PLAN.md §3.7):** only user-named speakers are labelled for the LLM; with no names, summary lines and prompt are today's byte for byte (`test_reason.py` checks). The model never maps `Speaker N` to a name.
+- **Local builds are auto-detected** (`IngestWorker(diarizer=AUTO)`, `Runner(diarization=None)`): unit tests must pin them off (`diarizer=None`, `diarization=False`) or real weights load on a Mac where they're built.
+- **Model-test memory:** `pytest -m model` runs in one process, so `mx.get_peak_memory()` includes earlier tests' models; assert the increase over `mx.get_active_memory()`, or measure in its own process.
+- **`eval compare` flags:** confirm with a fresh-process A/B before blaming a change; `*.s_per_table` timing rows flag at +0.02 s (noise); re-running `fetch_real_eval.py` rewrites the private set's references and schemas, so the next run isn't comparable on those metrics.
+- **Hook H3 matches the banned speech-model name anywhere in a Bash command**, heredoc text included: put scripted edits that mention it in a script file and run that.
+- **Screenshots of Streamlit pages:** `full_page=True` captures only the viewport (the app scrolls an inner container); screenshot an element (`page.locator("[data-testid=stExpander]")`) instead.
 - `config.py` and `.claude/hooks/*` are standard library only (hooks run with the system `python3`, 3.11+).
 
 ## Layout

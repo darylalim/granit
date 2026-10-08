@@ -1,4 +1,4 @@
-"""M6 layout check (PLAN.md §4.7, §4.8): every page × 760 / 1512 / 2560 px × light / dark → 24 screenshots and a report.
+"""M6 layout check (PLAN.md §4.7, §4.8): every page × 760 / 1512 / 2560 px × light / dark → 30 screenshots and a report.
 
     uv run --group screenshots python scripts/ui_screenshots.py --data DIR [--out DIR] [--url http://localhost:8501]
 
@@ -12,7 +12,8 @@ page, width and theme takes a screenshot and measures:
 - **h-scroll:** does the page scroll sideways? (it never should)
 
 A manual pre-merge check for UI changes, not part of CI (it needs the app and its models). Playwright drives the installed
-Google Chrome, so no browser is downloaded. Uses ``?source=ID`` deep links to show a document in Library and Extract.
+Google Chrome, so no browser is downloaded. Uses ``?source=ID`` deep links to show a document in Library and Extract,
+and a recording in Library (its Speakers panel and transcript, PLAN.md §3.7).
 """
 
 from __future__ import annotations
@@ -135,14 +136,17 @@ def main(argv: list[str] | None = None) -> int:
     report: list[dict[str, Any]] = []
     try:
         wait_for_http(url, 60)
-        source = args.source or first_document(args.data)
+        source = args.source or first_source(args.data, "document")
         form = args.form or source
+        recording = first_source(args.data, "audio")
         pages = {
             "ask": "/",
             "ingest": "/ingest",
             "library": f"/library?source={source}" if source else "/library",
             "extract": f"/extract?source={form}" if form else "/extract",
         }
+        if recording:
+            pages["recording"] = f"/library?source={recording}"
         with sync_playwright() as pw:
             browser = pw.chromium.launch(channel="chrome")
             wait_until_ready(browser, url)
@@ -180,14 +184,14 @@ def main(argv: list[str] | None = None) -> int:
     return 1 if problems else 0
 
 
-def first_document(data: Path | None) -> int | None:
+def first_source(data: Path | None, kind: str) -> int | None:
     if data is None:
         return None
     from granit.store.db import Store
 
     store = Store(data)
     try:
-        return next((s.id for s in store.sources() if s.kind == "document"), None)
+        return next((s.id for s in store.sources() if s.kind == kind), None)
     finally:
         store.close()
 

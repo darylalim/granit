@@ -143,6 +143,30 @@ def test_library_shows_a_recording_transcript(ready: Backend) -> None:
     assert "No summary yet" in texts(at)
 
 
+def test_library_names_a_recordings_speakers(ready: Backend) -> None:
+    from granit.ingest.audio import Segment, Transcript, Word
+
+    wait_ready(ready)
+    audio = next(s for s in ready.store.sources() if s.kind == "audio")
+    words = (Word("send", 1.0, 1.5, 1), Word("it", 1.5, 2.0, 1), Word("will", 3.0, 3.5, 2))
+    spoken = Transcript(12.7, 6.4, 1, (Segment(1.0, 3.5, "send it will", words),), "speech@rev")
+    (ready.store.derived_dir(audio) / "transcript.json").write_text(json.dumps(spoken.to_json()))
+    at = AppTest.from_file(HOME, default_timeout=30)
+    at.session_state["library_selected"] = audio.id
+    at.run()
+    at.switch_page("app_pages/library.py").run()
+    assert not at.exception, at.exception
+    assert [e.label for e in at.expander if e.label.startswith("Speakers")] == [
+        "Speakers · 0 of 2 named"
+    ]
+    assert "**Speaker 2** will" in texts(at).replace("`0:03` ", "")
+    at.text_input(key=f"speaker_name_{audio.id}_2").input("Priya")
+    next(b for b in at.button if b.label == "Save names").click().run()
+    assert not at.exception, at.exception
+    assert ready.store.speaker_names(audio.id) == {2: "Priya"}
+    assert "**Priya** will" in texts(at).replace("`0:03` ", "")
+
+
 def test_extract_checks_the_schema_and_queues_a_job(ready: Backend) -> None:
     wait_ready(ready)
     at = app("app_pages/extract.py")

@@ -650,7 +650,9 @@ def main() -> None:
             )
             (OUT / "summaries").mkdir(parents=True, exist_ok=True)
             summary = {"file": f"files/meetings/{name}.m4a", "action_items": spec["action_items"],
-                       "decisions": spec["decisions"]}  # fmt: skip
+                       "decisions": spec["decisions"],
+                       "speakers": [{"name": who, "start": start, "end": end}
+                                    for (who, _), (start, end) in zip(spec["lines"], times[name], strict=True)]}  # fmt: skip
             (OUT / "summaries" / f"{name}.yaml").write_text(
                 yaml.safe_dump(summary, sort_keys=False, width=120)
             )

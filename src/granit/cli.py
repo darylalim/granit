@@ -45,11 +45,12 @@ def _models_convert(args: argparse.Namespace) -> int:
 
     for key in args.keys or list(LOCAL_MODELS):
         model = LOCAL_MODELS[key]
-        print(f"→ building {model.path.name} ({model.q_bits}-bit) from {model.source}", flush=True)
+        precision = f"{model.q_bits}-bit" if model.q_bits else "unquantized"
+        print(f"→ building {model.path.name} ({precision}) from {model.source}", flush=True)
         print(f"  {build(model)}")
         if args.delete_source:
             freed = delete_cached(HUB_MODELS[model.source])
-            print(f"  deleted bf16 source from the HF cache ({freed / 1e9:.1f} GB freed)")
+            print(f"  deleted the source from the HF cache ({freed / 1e9:.1f} GB freed)")
     return 0
 
 
@@ -81,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     download.add_argument("keys", nargs="*", choices=[[], *HUB_MODELS], metavar="KEY")
     download.set_defaults(func=_models_download)
 
-    convert = actions.add_parser("convert", help="build local quantized models (Guardian q8)")
+    convert = actions.add_parser("convert", help="build local models (Guardian q8, diarization)")
     convert.add_argument("keys", nargs="*", choices=[[], *LOCAL_MODELS], metavar="KEY")
     convert.add_argument(
         "--delete-source",
@@ -173,6 +174,17 @@ def build_parser() -> argparse.ArgumentParser:
     meeting.add_argument("--data", type=Path, help=data_help)
     meeting.set_defaults(func=_meeting)
 
+    speakers = commands.add_parser(
+        "speakers",
+        help="list a recording's speakers, or name them: granit speakers 3 1=Priya 2='Project Manager'",
+    )
+    speakers.add_argument("source", help="source id (see `granit sources`) or file name")
+    speakers.add_argument(
+        "names", nargs="*", metavar="SPEAKER=NAME", help="name speakers (blank name: unname)"
+    )
+    speakers.add_argument("--data", type=Path, help=data_help)
+    speakers.set_defaults(func=_speakers)
+
     verify = commands.add_parser(
         "verify",
         help="check answers and meeting summaries with Granite Guardian (Phase C)",
@@ -252,13 +264,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _transcribe(args: argparse.Namespace) -> int:
-    from granit.ingest.audio import AudioError, AudioTranscriber, timestamp
+    from granit.ingest.audio import AudioError, AudioTranscriber, decode, timestamp
+    from granit.ingest.speakers import Diarizer, speaker_count, speaker_label, turns
 
     transcriber = AudioTranscriber().load()  # models load once for every file
+    diarizer = Diarizer().load() if Diarizer.available() else None
     failed = 0
     for path in args.files:
         try:
-            transcript = transcriber.transcribe(path)
+            audio = decode(path)
+            transcript = transcriber.transcribe_audio(audio)
+            if diarizer is not None:
+                transcript = diarizer.label(transcript, audio)
         except (AudioError, FileNotFoundError) as exc:
             print(f"✗ {path}: {exc}", file=sys.stderr)
             failed += 1
@@ -267,9 +284,14 @@ def _transcribe(args: argparse.Namespace) -> int:
             f"── {path.name}: {timestamp(transcript.duration_s)} long, "
             f"{transcript.speech_s:.0f} s speech / {transcript.silence_s:.0f} s silence, "
             f"{len(transcript.segments)} segments"
+            + (f", {speaker_count(transcript)} speakers" if diarizer is not None else "")
         )
-        for segment in transcript.segments:
-            print(f"[{timestamp(segment.start)}] {segment.text}")
+        if diarizer is not None:
+            for turn in turns(transcript.segments):
+                print(f"[{timestamp(turn.start)}] {speaker_label(turn.speaker, {})}: {turn.text}")
+        else:
+            for segment in transcript.segments:
+                print(f"[{timestamp(segment.start)}] {segment.text}")
         if args.json:
             args.json.mkdir(parents=True, exist_ok=True)
             out = args.json / f"{path.stem}.transcript.json"
@@ -501,6 +523,45 @@ def _ask(args: argparse.Namespace) -> int:
     for number, hit in zip(answer.citation_numbers(), answer.cited, strict=True):
         print(f"  [{number}] {hit.citation}")
     print(f"  ({answer.latency['total_s']:.1f} s, turn #{answer.turn_id})", file=sys.stderr)
+    return 0
+
+
+def _speakers(args: argparse.Namespace) -> int:
+    from granit.ingest.audio import Transcript, timestamp
+    from granit.ingest.speakers import parse_names, speaker_infos
+
+    store = _store(args)
+    matches = [s for s in store.sources() if str(s.id) == args.source or s.name == args.source]
+    if not matches or matches[0].kind != "audio" or matches[0].status != "ready":
+        print(f"no ingested recording {args.source!r} (see `granit sources`)", file=sys.stderr)
+        return 1
+    source = matches[0]
+    path = store.derived_dir(source) / "transcript.json"
+    infos = speaker_infos(Transcript.from_json(json.loads(path.read_text())).segments)
+    if not infos:
+        print(
+            f"{source.name} has no speakers: build the model (`granit models convert diarization`),"
+            " then re-transcribe it",
+            file=sys.stderr,
+        )
+        return 1
+    names = store.speaker_names(source.id)
+    if args.names:
+        try:
+            given = parse_names(args.names)
+        except ValueError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        unknown = sorted(set(given) - {i.speaker for i in infos})
+        if unknown:
+            print(f"{source.name} has no speaker {unknown[0]}", file=sys.stderr)
+            return 1
+        names = store.set_speaker_names(source, {**names, **given})
+    for info in infos:
+        name = names.get(info.speaker, "(unnamed)")
+        print(f"Speaker {info.speaker}: {name} · {info.talk_s:.0f} s in {info.turns} turns")
+        for turn in info.samples:
+            print(f"   [{timestamp(turn.start)}] {turn.text[:120]}")
     return 0
 
 

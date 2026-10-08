@@ -135,7 +135,7 @@ def fake_judge(items: list[dict[str, Any]], workdir: Path, log: Any) -> list[dic
     ]
 
 
-def runner(root: Path, library: Path) -> Runner:
+def runner(root: Path, library: Path, diarization: bool = False) -> Runner:
     world = World()
     return Runner(
         load_set(str(root)),
@@ -151,6 +151,7 @@ def runner(root: Path, library: Path) -> Runner:
             QA(store, searcher, FakeLLM(), ApproxTokens(), mode="bm25"),
         ),
         judge=fake_judge,
+        diarization=diarization,
     )
 
 
@@ -377,6 +378,20 @@ def test_the_set_vocabulary_is_applied_and_retranscribes_on_change(
     assert len([j for j in Store(library).jobs() if j.task == "ingest"]) == ingests
     (eval_root / "vocabulary.txt").write_text("Northbeam\n")
     runner(eval_root, library).run()  # another list: the recordings are transcribed again
+    assert len([j for j in Store(library).jobs() if j.task == "ingest"]) == ingests + len(audio)
+
+
+def test_recordings_without_speakers_are_retranscribed_once_diarization_is_built(
+    eval_root: Path, tmp_path: Path
+) -> None:
+    library = tmp_path / "library"
+    runner(eval_root, library).run()
+    store = Store(library)
+    audio = [s for s in store.sources() if s.kind == "audio"]
+    ingests = len([j for j in store.jobs() if j.task == "ingest"])
+    runner(eval_root, library, diarization=False).run()
+    assert len([j for j in Store(library).jobs() if j.task == "ingest"]) == ingests
+    runner(eval_root, library, diarization=True).run()  # no "speakers" in their info yet
     assert len([j for j in Store(library).jobs() if j.task == "ingest"]) == ingests + len(audio)
 
 

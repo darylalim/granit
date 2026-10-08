@@ -272,3 +272,35 @@ def test_vocabulary_is_saved_for_the_library(store: Store) -> None:
     store.set_vocabulary(["Northbeam", "Priya", "Zoë"])  # replaced, not appended
     assert store.vocabulary() == ["Northbeam", "Priya", "Zoë"]
     assert Store(store.root).vocabulary() == ["Northbeam", "Priya", "Zoë"]  # persisted
+
+
+# ── speaker names (M9, PLAN.md §3.7) ──
+
+
+def test_speaker_names_replace_trim_and_unname(store: Store) -> None:
+    source, _ = store.add_file(DOC)
+    assert store.speaker_names(source.id) == {}
+    stored = store.set_speaker_names(source, {1: "  Priya  Raman ", 2: "Sam", 3: "", 4: "   "})
+    assert stored == {1: "Priya Raman", 2: "Sam"}
+    assert store.speaker_names(source.id) == stored
+    store.set_speaker_names(source, {2: "Sam", 3: "Sam"})  # same name: one person
+    assert store.speaker_names(source.id) == {2: "Sam", 3: "Sam"}
+    with pytest.raises(ValueError, match="numbered from 1"):
+        store.set_speaker_names(source, {0: "Nobody"})
+
+
+def test_reingest_clears_speaker_names_and_deleting_cascades(store: Store) -> None:
+    source, _ = store.add_file(DOC)
+    job = store.claim_next()
+    assert job is not None
+    store.complete_ingest(job, [], np.zeros((0, 768), np.float16), "rev")
+    store.set_speaker_names(source, {1: "Elena"})
+    again = store.queue_ingest(store.source(source.id))
+    assert store.speaker_names(source.id) == {1: "Elena"}  # kept until the new transcript lands
+    claimed = store.claim_next()
+    assert claimed is not None and claimed.id == again.id
+    store.complete_ingest(claimed, [], np.zeros((0, 768), np.float16), "rev")
+    assert store.speaker_names(source.id) == {}  # speakers were renumbered
+    store.set_speaker_names(source, {1: "Elena"})
+    store.delete_source(store.source(source.id))
+    assert store.conn.execute("SELECT COUNT(*) FROM speaker_names").fetchone()[0] == 0

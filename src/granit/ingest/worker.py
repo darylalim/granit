@@ -33,6 +33,9 @@ class WorkerReport:
     peak_footprint_gb: float = 0.0
 
 
+AUTO: Any = object()  # IngestWorker(diarizer=AUTO): load the diarization model when it's built
+
+
 class IngestWorker:
     def __init__(
         self,
@@ -41,12 +44,15 @@ class IngestWorker:
         documents: Any = None,
         embedder: Any = None,
         mlx_cache_limit_gb: float | None = INGEST_MLX_CACHE_LIMIT_GB,
+        diarizer: Any = AUTO,
     ) -> None:
         self.store = store
         self._transcriber = transcriber
         self._documents = documents
         self._embedder = embedder
         self.mlx_cache_limit_gb = mlx_cache_limit_gb
+        # AUTO: the local diarization build if it exists (PLAN.md §3.7); None: recordings get no speakers.
+        self._diarizer = diarizer
 
     # lazily loaded models
 
@@ -57,6 +63,14 @@ class IngestWorker:
 
             self._transcriber = AudioTranscriber().load()
         return self._transcriber
+
+    @property
+    def diarizer(self) -> Any:
+        if self._diarizer is AUTO:
+            from granit.ingest.speakers import Diarizer
+
+            self._diarizer = Diarizer().load() if Diarizer.available() else None
+        return self._diarizer
 
     @property
     def documents(self) -> Any:
@@ -121,6 +135,10 @@ class IngestWorker:
         if source.kind == "audio":
             vocabulary = self.store.vocabulary()
             transcript = self.transcriber.transcribe(path).with_vocabulary(vocabulary)
+            if self.diarizer is not None:
+                from granit.ingest.audio import decode
+
+                transcript = self.diarizer.label(transcript, decode(path))
             (out / "transcript.json").write_text(
                 json.dumps(transcript.to_json(), ensure_ascii=False)
             )
@@ -132,6 +150,10 @@ class IngestWorker:
                 "segments": len(transcript.segments),
                 "vocabulary": vocabulary,
             }
+            if self.diarizer is not None:
+                from granit.ingest.speakers import speaker_count
+
+                info["speakers"] = speaker_count(transcript)
         else:
             from docling_core.types.doc import DoclingDocument
 

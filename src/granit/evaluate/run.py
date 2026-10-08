@@ -147,8 +147,13 @@ class Runner:
         judge: Callable[
             [list[dict[str, Any]], Path, Log], list[dict[str, Any]]
         ] = run_judge_process,
+        diarization: bool | None = None,
     ) -> None:
         self.set = eval_set
+        # Recordings get speakers when the model is built (None: check); tests pin it.
+        self.diarization = (
+            LOCAL_MODELS["diarization"].is_built() if diarization is None else diarization
+        )
         self.config = config or EvalConfig()
         self.library = library or LIBRARIES / eval_set.name
         self.log = log
@@ -176,6 +181,7 @@ class Runner:
                 timings["phase_a_s"] = round(time.perf_counter() - start, 1)
             sources = {s.sha256: s for s in store.sources()}
             failed = [s.name for s in sources.values() if s.status != "ready"]
+            speakers = self._name_speakers(store, sources)
 
             self.log("Phase B: retrieval, answers and summaries…")
             start = time.perf_counter()
@@ -209,6 +215,7 @@ class Runner:
                 "extraction": self._extraction(store, sources, extract_jobs),
                 "tables": self._tables(store, sources),
                 "summaries": summaries,
+                "speakers": speakers,
                 "asr": self._asr(store, sources),
                 "speed": self._speed(rows),
             }
@@ -252,11 +259,14 @@ class Runner:
             if (
                 not created
                 and source.kind == "audio"
-                and source.info.get("vocabulary", []) != self.set.vocabulary
+                and (
+                    source.info.get("vocabulary", []) != self.set.vocabulary
+                    or ("speakers" not in source.info and self.diarization)
+                )
             ):
                 store.queue_ingest(
                     source
-                )  # transcribed with another names list: as the Library's "Re-transcribe"
+                )  # another names list, or no speakers yet: as the Library's "Re-transcribe"
         sources = {s.sha256: s for s in store.sources()}
         from granit.store.db import sha256_of
 
@@ -264,6 +274,36 @@ class Runner:
         for case in self.set.extractions:
             jobs[case.name] = store.enqueue_extract(sources[sha256_of(case.file)], case.schema).id
         return jobs
+
+    def _name_speakers(self, store: Store, sources: dict[str, Source]) -> dict[str, Any]:
+        """Name diarized speakers as a careful user would (PLAN.md §3.7): the reference name, at ≥ 80 % purity."""
+        from granit.ingest.audio import Transcript
+        from granit.store.db import sha256_of
+
+        attribution, named, total = [], 0, 0
+        for case in self.set.summaries:
+            source = sources.get(sha256_of(case.file))
+            if not case.speakers or source is None or source.status != "ready":
+                continue
+            path = store.derived_dir(source) / "transcript.json"
+            transcript = Transcript.from_json(json.loads(path.read_text()))
+            words = [(w.start, w.end, w.speaker) for s in transcript.segments for w in s.words]
+            spoken = {w[2] for w in words if w[2] is not None}
+            if not spoken:
+                continue
+            names = m.speaker_naming(words, case.speakers)
+            store.set_speaker_names(source, names)
+            attribution.append(m.speaker_attribution(words, case.speakers))
+            named += len(names)
+            total += len(spoken)
+            self.log(
+                f"  speakers {case.name}: {len(names)} of {len(spoken)} named"
+                f" ({', '.join(f'{k}={v}' for k, v in sorted(names.items())) or 'none'})"
+            )
+        return {
+            "word_attribution": m.mean(attribution),
+            "named_share": round(named / total, 4) if total else None,
+        }
 
     # Phase B
 

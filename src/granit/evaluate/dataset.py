@@ -7,7 +7,8 @@ Both use one format, in one directory:
   (``{source_sha256 | file, page | start_s + end_s}``; ``granit eval label`` fills them in for a private set).
 - ``files/``: the documents and recordings, ingested into the set's own library.
 - ``extraction/<name>.json``: ``{file, schema, expected}``: expected field values (``null`` = must be missing).
-- ``summaries/<name>.yaml``: ``{file, action_items: [{owner, task, due}], decisions: [...]}``.
+- ``summaries/<name>.yaml``: ``{file, action_items: [{owner, task, due}], decisions: [...]}``, optionally
+  ``speakers: [{name, start, end}]`` (who spoke when, for simulated speaker naming, PLAN.md §3.7).
 - ``transcripts/<name>.txt``: what was said, for WER (``file:`` on the first line names the recording).
 - ``tables/<name>.json``: ``{file, type, grid}``: the known cells of the file's table(s), for Docling vs Vision.
 - ``vocabulary.txt`` (optional): the library's names and terms, one per line or comma-separated (``audio.parse_terms``).
@@ -58,6 +59,7 @@ class SummaryCase:
     file: Path
     action_items: list[dict[str, Any]]
     decisions: list[str]
+    speakers: list[dict[str, Any]] = field(default_factory=list)  # [{name, start, end}]
 
 
 @dataclass
@@ -137,6 +139,7 @@ def load_set(name: str) -> EvalSet:
                 _file(root, d["file"]),
                 d.get("action_items") or [],
                 d.get("decisions") or [],
+                d.get("speakers") or [],
             )
             for p, d in _each(root / "summaries", "*.yaml", yaml.safe_load)
         ],

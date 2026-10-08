@@ -250,6 +250,42 @@ def transcript(annotations: zipfile.ZipFile, meeting: str) -> str:
     return " ".join(w for _, w in words if w.lower() not in FILLERS)
 
 
+ROLES = {
+    "PM": "Project Manager",
+    "ID": "Industrial Designer",
+    "UI": "User Interface Designer",
+    "ME": "Marketing Expert",
+}
+TURN_GAP_S = 1.0  # one speaker's words closer than this are one turn
+
+
+def speaker_turns(annotations: zipfile.ZipFile, meeting: str) -> list[dict[str, Any]]:
+    """Who spoke when, by role (scenario meetings only: AMI records roles in meetings.xml), for speaker naming (§3.7)."""
+    xml = annotations.read("corpusResources/meetings.xml").decode("latin-1")
+    block = re.search(rf'observation="{meeting}"(.*?)</meeting>', xml, re.DOTALL)
+    roles = {
+        agent: ROLES[role]
+        for agent, role in re.findall(
+            r'nxt_agent="([A-Z])"[^>]*role="([A-Z]+)"', block.group(1) if block else ""
+        )
+    }
+    turns: list[dict[str, Any]] = []
+    for agent, role in sorted(roles.items()):
+        name = f"words/{meeting}.{agent}.words.xml"
+        times = sorted(
+            (float(a), float(b))
+            for attrs in re.findall(r"<w ([^>]*)>", annotations.read(name).decode("latin-1"))
+            if 'punc="true"' not in attrs
+            for a, b in re.findall(r'starttime="([\d.]+)"[^>]*endtime="([\d.]+)"', attrs)
+        )
+        for start, end in times:
+            if turns and turns[-1]["name"] == role and start - turns[-1]["end"] < TURN_GAP_S:
+                turns[-1]["end"] = round(max(turns[-1]["end"], end), 2)
+            else:
+                turns.append({"name": role, "start": round(start, 2), "end": round(end, 2)})
+    return sorted(turns, key=lambda t: t["start"])
+
+
 def receipts(files: Path, extraction: Path) -> None:
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
@@ -295,6 +331,8 @@ def main() -> None:
                     f"file: {file}\n{transcript(annotations, meeting)}\n"
                 )
                 summary = {"file": file, **refs}
+                if speakers := speaker_turns(annotations, meeting):
+                    summary["speakers"] = speakers
                 (root / "summaries" / f"ami-{meeting}.yaml").write_text(
                     yaml.safe_dump(summary, sort_keys=False, width=120, allow_unicode=True)
                 )

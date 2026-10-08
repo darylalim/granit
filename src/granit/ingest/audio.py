@@ -195,6 +195,9 @@ class Word:
     text: str
     start: float
     end: float
+    speaker: int | None = (
+        None  # 1, 2, … by first appearance (PLAN.md §3.7); None: not diarized or no one heard
+    )
 
 
 def ctc_words(
@@ -330,7 +333,7 @@ def apply_vocabulary(words: Sequence[Word], terms: Sequence[str], max_words: int
             run = words[i : i + n]
             if term := _match(run, terms):
                 tail = run[-1].text[len(run[-1].text.rstrip(_EDGE_PUNCTUATION)) :]
-                fixed.append(Word(term + tail, run[0].start, run[-1].end))
+                fixed.append(Word(term + tail, run[0].start, run[-1].end, run[0].speaker))
                 i += n
                 break
         else:

@@ -500,3 +500,68 @@ def test_one_row_headers_and_spanning_totals_are_left_alone() -> None:
     )
     doc.add_table(data=TableData(num_rows=3, num_cols=3, table_cells=cells))
     assert documents.merge_headers(doc) == 0  # a spanning totals row isn't a header
+
+
+def _table_on(doc: Any, page: int, rows: list[list[str]]) -> Any:
+    from docling_core.types.doc import TableData
+
+    table = doc.add_table(data=TableData(num_rows=0, num_cols=0), prov=documents._on(page, "table"))
+    documents.fill_table(table, rows)
+    return table
+
+
+def _labels(table: Any) -> list[str]:
+    return [row[0].text for row in table.data.grid]
+
+
+def test_shifted_row_labels_are_corrected_from_the_text_layer() -> None:
+    """v30 private set (doc-02): Docling put the March federal funds rate under the memo label and December's under
+    *Federal funds rate*; the PDF's text layer has each label on the line with its values."""
+    from docling_core.types.doc import DoclingDocument
+
+    doc = DoclingDocument(name="t")
+    table = _table_on(
+        doc,
+        2,
+        [
+            ["Variable", "Median / 2024", "Median / 2025", "Range / 2024"],
+            ["Core PCE inflation 4", "2.6", "2.2", "2.4-3.0"],
+            ["Memo: Projected appropriate policy path", "4.6", "3.9", "4.4-5.4"],
+            ["Federal funds rate", "4.6", "3.6", "3.9-5.4"],
+        ],
+    )
+    lines = {
+        2: [
+            "Core PCE inflation4 2.6 2.2 2.4–3.0",  # same label, spaced differently: left alone
+            "Memo: Projected",
+            "appropriate policy path",
+            "Federal funds rate 4.6 3.9 4.4–5.4",
+            "December projection 4.6 3.6 3.9–5.4",
+        ]
+    }
+    assert documents.relabel_rows(doc, lines) == 2
+    assert _labels(table) == [
+        "Variable",
+        "Core PCE inflation 4",
+        "Federal funds rate",
+        "December projection",
+    ]
+    assert documents.relabel_rows(doc, lines) == 0  # already right
+
+
+def test_rows_are_relabelled_only_from_one_unambiguous_line_on_their_page() -> None:
+    from docling_core.types.doc import DoclingDocument
+
+    doc = DoclingDocument(name="t")
+    rows = [["Item", "Qty", "Amount"], ["Paper", "2", "10.00"], ["Toner", "5", ""]]
+    table = _table_on(doc, 1, rows)
+    lines = {
+        1: ["Ink 2 10.00", "Pens 2 $10.00"],  # two labels for the same values
+        2: ["Staples 2 10.00"],  # another page
+    }
+    assert documents.relabel_rows(doc, lines) == 0
+    assert (
+        documents.relabel_rows(doc, {1: ["Pens 5"]}) == 0
+    )  # one value isn't enough to match a line
+    assert documents.relabel_rows(doc, {}) == 0  # images and scans: no text layer
+    assert _labels(table) == ["Item", "Paper", "Toner"]

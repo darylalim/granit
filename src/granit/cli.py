@@ -557,6 +557,10 @@ def _speakers(args: argparse.Namespace) -> int:
             print(f"{source.name} has no speaker {unknown[0]}", file=sys.stderr)
             return 1
         names = store.set_speaker_names(source, {**names, **given})
+        if store.queued_count(["reindex"]):
+            print(
+                "search and Ask use the names after the next processing run (`granit ingest` runs it now)"
+            )
     for info in infos:
         name = names.get(info.speaker, "(unnamed)")
         print(f"Speaker {info.speaker}: {name} · {info.talk_s:.0f} s in {info.turns} turns")

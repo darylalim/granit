@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from granit.ingest.audio import Segment, Transcript
+from granit.ingest.audio import Segment, Transcript, Word
 from granit.store import chunking
 from granit.store.chunking import chunk_document, chunk_transcript, citation
 from tests.conftest import ROOT
@@ -137,3 +137,55 @@ def test_section_rows() -> None:
     assert not chunking.section_row("| Q1 | 100 | 1.0 |")
     assert not chunking.section_row("| | | |")
     assert not chunking.section_row("| Total |")  # a one-column table's rows are all "spanning"
+
+
+def dialogue(lines: list[tuple[int, str]], seconds: float = 3.0) -> Transcript:
+    """One segment per line, its words spoken by ``speaker``."""
+    segments = []
+    for i, (speaker, text) in enumerate(lines):
+        start = i * seconds
+        words = tuple(
+            Word(w, start + j * 0.2, start + j * 0.2 + 0.1, speaker)
+            for j, w in enumerate(text.split())
+        )
+        segments.append(Segment(start, words[-1].end, text, words))
+    return Transcript(len(lines) * seconds, len(lines) * seconds, 1, tuple(segments), "speech@rev")
+
+
+MEETING = [
+    (1, "Then let's renew for two years."),
+    (2, "Will do."),
+    (3, "Yes, I'll set that up."),
+    (3, "Drivers rely on it every day."),
+]
+MEETING_END = 9.0 + 5 * 0.2 + 0.1  # the last line starts at 9 s; its sixth word ends 1.1 s later
+
+
+def test_named_speakers_start_their_lines_in_chunks() -> None:
+    """PLAN.md §3.8: search finds the name and Ask sees who spoke; unnamed speakers stay plain, as in summaries."""
+    chunks = chunk_transcript(dialogue(MEETING), {3: "Sam", 2: "Priya"})
+    assert [c.text for c in chunks] == [
+        "Then let's renew for two years.\n"
+        "Priya: Will do.\n"
+        "Sam: Yes, I'll set that up. Drivers rely on it every day."
+    ]
+    assert chunks[0].start_s == 0.0 and chunks[0].end_s == MEETING_END
+    assert "Speaker" not in chunks[0].text  # the model never sees an unnamed speaker's number
+
+
+def test_without_names_chunks_are_todays_exactly() -> None:
+    transcript = dialogue(MEETING)
+    assert chunk_transcript(transcript, {}) == chunk_transcript(transcript)
+    assert chunk_transcript(transcript)[0].text == " ".join(text for _, text in MEETING)
+
+
+def test_named_turns_pack_to_the_target_and_long_turns_keep_their_name() -> None:
+    long = " ".join(f"word{i}" for i in range(400))  # ~3,000 characters: over MAX_CHARS
+    chunks = chunk_transcript(
+        dialogue([(1, "Short opening line."), (2, long)]), {2: "Priya"}, target=300
+    )
+    assert all(len(c.text) <= chunking.MAX_CHARS for c in chunks)
+    pieces = [line for c in chunks for line in c.text.splitlines()]
+    assert pieces[0] == "Short opening line."
+    assert len(pieces) > 2 and all(p.startswith("Priya: ") for p in pieces[1:])
+    assert " ".join(p.removeprefix("Priya: ") for p in pieces[1:]) == long

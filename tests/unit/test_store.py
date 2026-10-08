@@ -304,3 +304,26 @@ def test_reingest_clears_speaker_names_and_deleting_cascades(store: Store) -> No
     store.set_speaker_names(source, {1: "Elena"})
     store.delete_source(store.source(source.id))
     assert store.conn.execute("SELECT COUNT(*) FROM speaker_names").fetchone()[0] == 0
+
+
+def test_recordings_named_before_m10_are_reindexed_once(tmp_path: Path) -> None:
+    """Migration 5 (PLAN.md §3.8): names stored under M9 never reached search, and saving them again changes nothing."""
+    conn = sqlite3.connect(tmp_path / "old.db", isolation_level=None)
+    conn.execute("PRAGMA foreign_keys=ON")
+    for number, script in enumerate(db.MIGRATIONS[:4], start=1):
+        conn.executescript(script)
+        conn.execute(f"PRAGMA user_version = {number}")
+    for sha in ("a", "b"):
+        conn.execute(
+            "INSERT INTO sources (sha256, name, ext, kind, size_bytes, added_at)"
+            " VALUES (?, ?, '.wav', 'audio', 1, ?)",
+            (sha, f"{sha}.wav", db.now()),
+        )
+    conn.executemany(
+        "INSERT INTO speaker_names (source_id, speaker, name) VALUES (1, ?, ?)",
+        [(1, "Elena"), (2, "Priya")],
+    )
+    assert db.migrate(conn) == len(db.MIGRATIONS) == 5
+    assert conn.execute("SELECT task, source_id, status FROM jobs").fetchall() == [
+        ("reindex", 1, "queued")
+    ]

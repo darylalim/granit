@@ -125,7 +125,23 @@ class IngestWorker:
             return self._ingest(job)
         if job.task == "extract":
             return self._extract(job)
+        if job.task == "reindex":
+            return self._reindex(job)
         raise ValueError(f"unknown task {job.task!r}")
+
+    def _reindex(self, job: Job) -> str:
+        """A recording's chunks rebuilt from its stored transcript with the current speaker names (PLAN.md §3.8): only
+        the embedder loads, no Speech, Docling or Vision."""
+        from granit.ingest.audio import Transcript
+
+        source = self.store.source(job.source)
+        path = self.store.derived_dir(source) / "transcript.json"
+        transcript = Transcript.from_json(json.loads(path.read_text()))
+        names = self.store.speaker_names(source.id)
+        chunks = chunk_transcript(transcript, names)
+        vectors = self.embedder.encode([c.search_body for c in chunks])
+        self.store.complete_reindex(job, chunks, vectors, self.embedder.revision)
+        return f"{len(chunks)} chunks, {len(names)} named speakers"
 
     def _ingest(self, job: Job) -> str:
         source = self.store.source(job.source)

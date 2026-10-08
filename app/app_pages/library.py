@@ -192,7 +192,8 @@ def show_speakers(source: Source, transcript: dict) -> None:
         expanded=named < len(rows),
     ):
         st.caption(
-            "Name the people you recognize: summaries use the names to give action items an owner."
+            "Name the people you recognize: summaries use the names to give action items an owner, and search and"
+            " Ask use them to tell who said what."
             " Leave a speaker blank if its samples mix two people (its lines are then summarized without a name),"
             " and give two speakers the same name if they're one person."
         )
@@ -221,7 +222,10 @@ def show_speakers(source: Source, transcript: dict) -> None:
                         )
             if st.form_submit_button("Save names", icon=":material/save:"):
                 store.set_speaker_names(source, entered)
-                st.toast("Speaker names saved.", icon=":material/record_voice_over:")
+                st.toast(
+                    "Speaker names saved. Search and Ask use them after the next processing run.",
+                    icon=":material/record_voice_over:",
+                )
                 st.rerun()
 
 

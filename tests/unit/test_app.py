@@ -164,6 +164,7 @@ def test_library_names_a_recordings_speakers(ready: Backend) -> None:
     next(b for b in at.button if b.label == "Save names").click().run()
     assert not at.exception, at.exception
     assert ready.store.speaker_names(audio.id) == {2: "Priya"}
+    assert ready.store.queued_count(["reindex"]) == 1  # search and Ask get the name (PLAN.md §3.8)
     assert "**Priya** will" in texts(at).replace("`0:03` ", "")
 
 

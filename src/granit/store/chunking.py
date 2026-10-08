@@ -14,7 +14,7 @@ tokenizer is needed, which keeps chunking testable in CI without model files.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -31,7 +31,14 @@ _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
 # ── transcripts ──
 
 
-def chunk_transcript(transcript: Transcript, target: int = TARGET_CHARS) -> list[NewChunk]:
+def chunk_transcript(
+    transcript: Transcript, names: Mapping[int, str] | None = None, target: int = TARGET_CHARS
+) -> list[NewChunk]:
+    """Segments packed to ``target`` characters. With speaker names (PLAN.md §3.8), turns instead: a named speaker's turn
+    is a ``Priya: …`` line, everyone else's a plain line, so search finds the name and Ask sees who spoke. No names:
+    today's chunks exactly."""
+    if names:
+        return _chunk_turns(transcript, names, target)
     chunks: list[NewChunk] = []
     texts: list[str] = []
     start = end = 0.0
@@ -45,6 +52,43 @@ def chunk_transcript(transcript: Transcript, target: int = TARGET_CHARS) -> list
         end = segment.end
     if texts:
         chunks.append(NewChunk(" ".join(texts), "speech", start_s=start, end_s=end))
+    return chunks
+
+
+def _turn_lines(
+    transcript: Transcript, names: Mapping[int, str], limit: int
+) -> list[tuple[str, float, float]]:
+    """``(line, start, end)`` per turn; a turn longer than ``limit`` is split at words, each piece keeping its name."""
+    from granit.ingest.speakers import labelled_turns
+
+    out = []
+    for turn in labelled_turns(transcript.segments, names):
+        prefix = f"{names[turn.speaker]}: " if turn.speaker is not None else ""
+        piece: list[str] = []
+        for word in turn.text.split():
+            if piece and len(prefix) + len(" ".join([*piece, word])) > limit:
+                out.append((prefix + " ".join(piece), turn.start, turn.end))
+                piece = []
+            piece.append(word)
+        if piece:
+            out.append((prefix + " ".join(piece), turn.start, turn.end))
+    return out
+
+
+def _chunk_turns(transcript: Transcript, names: Mapping[int, str], target: int) -> list[NewChunk]:
+    chunks: list[NewChunk] = []
+    lines: list[str] = []
+    start = end = 0.0
+    for line, line_start, line_end in _turn_lines(transcript, names, MAX_CHARS):
+        if lines and len("\n".join(lines)) + 1 + len(line) > target:
+            chunks.append(NewChunk("\n".join(lines), "speech", start_s=start, end_s=end))
+            lines = []
+        if not lines:
+            start = line_start
+        lines.append(line)
+        end = line_end
+    if lines:
+        chunks.append(NewChunk("\n".join(lines), "speech", start_s=start, end_s=end))
     return chunks
 
 

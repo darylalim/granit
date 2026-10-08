@@ -431,3 +431,16 @@ def test_an_area_a_set_does_not_cover_is_reported_not_failed() -> None:
     assert not report.passed(
         [{"metric": "a", "pass": None, "informational": False}]
     )  # nothing measured
+
+
+def test_speaker_questions_are_reported_outside_the_headline_fact_coverage(tmp_path: Path) -> None:
+    """PLAN.md §3.8: who-said-it questions are informational until M10 has a measured value; they mustn't fail a set."""
+    row: dict[str, Any] = {"citation_precision": 1.0, "declined": False}
+    rows = [
+        {**row, "category": "meeting", "facts": 1.0},
+        {**row, "category": "speaker", "facts": 0.0},
+        {**row, "category": "unanswerable", "facts": None, "declined": True},
+    ]
+    answers = runner(build_set(tmp_path / "set"), tmp_path / "lib")._answers(rows)
+    assert answers["fact_coverage"] == 1.0
+    assert answers["by_category"]["speaker"]["fact_coverage"] == 0.0

@@ -564,6 +564,12 @@ QUESTIONS = [
     q("mtg-05", "How full is the Tacoma warehouse, according to the peak season meeting?", "meeting", ["87% | eighty seven percent | eighty-seven percent | 87 percent"], ("peak-season", [3])),
     q("mtg-06", "What is the new go-live date for Project Atlas mentioned in the check-in?", "meeting", ["November 3 | November third | 2026-11-03 | Nov 3"], ("atlas-checkin", [1])),
     q("mtg-07", "Who is responsible for the barcode scanner firmware update?", "meeting", ["Sam"], ("atlas-checkin", [3])),
+    # who said it (PLAN.md §3.8): the name is only the line's speaker, never in the words; Sam and Marcus are the speakers the
+    # runner's simulated naming names (§3.7 As built), so these are answerable only once named speakers reach search
+    q("spk-01", "Who said the new route reports saved about nine percent on fuel?", "speaker", ["Sam"], ("vendor-review", [2])),
+    q("spk-02", "Who reported September's shipment volumes in the peak season meeting?", "speaker", ["Sam"], ("peak-season", [0])),
+    q("spk-03", "In the Atlas check-in, who said the data migration slipped?", "speaker", ["Sam"], ("atlas-checkin", [1])),
+    q("spk-04", "Who said they would email the key customers tomorrow?", "speaker", ["Marcus"], ("atlas-checkin", [5])),
     q("x-01", "How much does the Northbeam renewal cost per year, and what was the total on Northbeam's invoice?", "cross-source",
       ["16,500 | sixteen thousand five hundred", "$18,000.00"], ("vendor-review", [1]), ("invoices/inv-06.pdf", 1)),
     q("x-02", "Do the Atlas status report and the check-in meeting agree on the go-live date?", "cross-source",

@@ -2,7 +2,8 @@
 
 Both use one format, in one directory:
 
-- ``questions.yaml``: ``id``, ``question``, ``category`` (document | meeting | cross-source | unanswerable),
+- ``questions.yaml``: ``id``, ``question``, ``category`` (document | meeting | cross-source | speaker | unanswerable;
+  ``speaker``: who said something in a meeting, answerable only from user-named speakers, PLAN.md §3.8),
   ``expected_facts`` (each matched after normalization; ``"two years | 2 years"`` accepts either), ``gold_refs``
   (``{source_sha256 | file, page | start_s + end_s}``; ``granit eval label`` fills them in for a private set).
 - ``files/``: the documents and recordings, ingested into the set's own library.
@@ -28,7 +29,7 @@ from granit.evaluate.metrics import Ref
 from granit.ingest.audio import parse_terms
 from granit.store.db import sha256_of
 
-CATEGORIES = ("document", "meeting", "cross-source", "unanswerable")
+CATEGORIES = ("document", "meeting", "cross-source", "speaker", "unanswerable")
 SETS = {"public": PROJECT_ROOT / "eval" / "public", "private": DATA_DIR / "eval"}
 
 
@@ -214,7 +215,7 @@ TEMPLATE = """\
 #   uv run granit eval run --set private
 - id: doc-001
   question: "What is the total on invoice …?"
-  category: document            # document | meeting | cross-source | unanswerable
+  category: document            # document | meeting | cross-source | speaker | unanswerable
   expected_facts: ["$1,234.00"]  # "a | b" accepts either
 - id: none-001
   question: "A question your documents can't answer"

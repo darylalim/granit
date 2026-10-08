@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v46 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v47 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v47: two fixes for mtg-01 tried and rejected (§4.9 *Private set*, item 4). v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -218,6 +218,10 @@ non-AMI meeting with speaker references for the private set (§3.7 *Evaluation*)
 private fact coverage **0.833 → 0.870** (goal 0.85 reached). `eval compare` flags hybrid+rerank MRR@8 0.849 → 0.819: the old top
 hit for doc-02 was the lone row mislabelled *Federal funds rate* (December's values), and the correct row now shares a chunk with
 the Core PCE rows (rank 1 → 3; cross-01 rank 3 → 5, still answered). Recall@8 stays 1.000. Public set: `relabel_rows` changes no row in its stored documents (not re-run).
+
+**Changes in v47:** two fixes for mtg-01 (the answer gives the first proposed meeting time, not the agreed one) were measured
+and **rejected**, so they aren't tried again (§4.9 *Private set*, item 4). Each ran in its own process on both sets (no judge),
+against fresh-process baselines on the same libraries.
 ---
 
 ## 1. Scope (v1)
@@ -1844,7 +1848,13 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
    are worth 0.001. Most of the WER is **dropped words** where the four speakers overlap or backchannel: the reference
    interleaves every speaker, one CTC stream can't. Reaching ≤ 0.10 needs a stronger speech model, not formatting fixes.
    mtg-01 (v34): the transcript says "2 o'clock", the answer still gives the first proposal (11): answers should prefer what
-   was finally agreed.
+   was finally agreed. **v47 (both rejected):** the proposal ("next Tuesday … 11 o'clock", chunk 26) and the change ("it would
+   have to be in the afternoon … about 2 o'clock … perfect", chunk 27, which never says *Tuesday* or *meeting*) are adjacent
+   chunks the prompt gave as [4] and [2]. (a) A RAG rule, *when passages from one recording disagree, answer with the latest*:
+   no change on either set (mtg-01 still 11 o'clock). (b) Adjacent chunks of one source kept together in reading order
+   (`[3] … (continues [2])`, one chunk per source number): mtg-01 0.5 → 0 (declined), doc-04 1 → 0 (garbled `± 2 . 2`),
+   private fact coverage 0.870 → 0.815; public unchanged. Left open: transcripts too garbled to link a reply to its proposal;
+   a stronger speech model or speaker turns in chunks (§3.7) would change what the model reads.
 5. **Action items (v30 triage, 3 of 11 matched):** the AMI references name **roles** as owners ("Project Manager") for 6 of 11
    items, which the annotators knew from the corpus metadata; with no speaker labels the summary gives `null` or a first name, so
    2 items with the right task still miss on the owner. Ignoring owners, recall is 0.467, so most of the gap is real: one

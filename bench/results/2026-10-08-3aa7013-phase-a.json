@@ -1,0 +1,124 @@
+{
+  "system": {
+    "date": "2026-10-08T17:57:36+00:00",
+    "git_sha": "3aa7013",
+    "chip": "Apple M2 Max",
+    "memory_gb": 32,
+    "macos": "26.6.2",
+    "gpu_working_set_limit_gb": 26.8,
+    "versions": {
+      "mlx": "0.32.3",
+      "mlx-lm": "0.32.0",
+      "mlx-vlm": "0.7.4",
+      "mlx-audio": "0.5.7",
+      "docling": "2.133.0",
+      "torch": "2.14.1"
+    },
+    "models": {
+      "speech": "947f59af40",
+      "vad": "2ebf4a5e10",
+      "docling": "e9939db25d",
+      "vision": "37d591f063",
+      "llm": "a60999a162",
+      "embedding": "47ea694b25",
+      "reranker": "d09d3d6971",
+      "guardian-source": "ab01ccca5d",
+      "diarization-source": "f667ed73ae"
+    }
+  },
+  "quick": false,
+  "results": {
+    "phase-a": {
+      "load_s": {
+        "speech": 0.38,
+        "vad": 0.02,
+        "docling": 1.36,
+        "vision": 2.83,
+        "embedding": 1.19,
+        "diarization": 0.14,
+        "total": 5.92
+      },
+      "memory_after_load": {
+        "peak_footprint_gb": 12.1,
+        "current_footprint_gb": 12.1
+      },
+      "workload": {
+        "audio": {
+          "audio_s": 112.2,
+          "vad_s": 0.506,
+          "chunks": 5,
+          "transcribe_s": 0.34,
+          "real_time_factor": 0.008,
+          "words": 170
+        },
+        "speakers": {
+          "audio_s": 112.2,
+          "seconds": 0.17,
+          "frames": 11218
+        },
+        "docling": {
+          "page_s": 2.86,
+          "markdown_chars": 1096
+        },
+        "vision": {
+          "chart2csv": {
+            "seconds": 3.0,
+            "prompt_tokens": 1037,
+            "generation_tokens": 63,
+            "prompt_tps": 669.5,
+            "generation_tps": 44.8
+          },
+          "tables_html": {
+            "seconds": 20.34,
+            "prompt_tokens": 1194,
+            "generation_tokens": 800,
+            "prompt_tps": 657.9,
+            "generation_tps": 43.3
+          }
+        },
+        "embed_chunks": {
+          "chunks": 256,
+          "seconds": 4.53,
+          "chunks_per_s": 56.6
+        }
+      },
+      "memory_by_stage": {
+        "audio": {
+          "current_gb": 13.74,
+          "peak_gb": 13.74
+        },
+        "speakers": {
+          "current_gb": 15.15,
+          "peak_gb": 15.15
+        },
+        "docling": {
+          "current_gb": 12.17,
+          "peak_gb": 17.05
+        },
+        "vision": {
+          "current_gb": 12.33,
+          "peak_gb": 17.05
+        },
+        "embed_chunks": {
+          "current_gb": 12.28,
+          "peak_gb": 17.05
+        }
+      },
+      "memory": {
+        "peak_footprint_gb": 17.05,
+        "current_footprint_gb": 12.28,
+        "mlx_peak_gb": 11.79,
+        "mps_gb": 11.24
+      }
+    }
+  },
+  "seconds": {
+    "phase-a": 58.9
+  },
+  "budget": [
+    {
+      "line": "\u2705 Phase A: peak 17.1 GB (plan ~12.0 GB, +5.1); 9.8 GB below the 26.8 GB GPU limit",
+      "within_limit": true
+    }
+  ]
+}

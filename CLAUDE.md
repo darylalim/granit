@@ -11,7 +11,7 @@ uv run pytest                             # unit tests only (default: -m "not mo
 uv run pytest -m model                    # model smoke/golden tests on the Mac (loads GBs; one phase at a time)
 uv run ruff format && uv run ruff check   # format + lint
 uv run ty check src tests app             # types
-uv run granit models list|download|convert|smoke
+uv run granit models list|download|convert|smoke  # convert: Guardian q8 + diarization fp32 (local builds in models/)
 uv run granit transcribe FILE… [--json DIR]  # audio → timestamped segments (M2)
 uv run granit convert FILE… [--out DIR] [--vision-tables]  # PDF/image → Markdown + chart data (M3)
 uv run granit extract FILE --schema S.json  # form fields via Granite Vision, validated (M3)
@@ -20,6 +20,7 @@ uv run granit search "question" [--mode bm25|vectors|hybrid|hybrid+rerank] [--js
 uv run granit sources  # the library
 uv run granit ask "question" [--thinking off|low|on]  # cited answer (M5; starts Q&A if needed)
 uv run granit meeting SOURCE  # meeting summary JSON (M5)
+uv run granit speakers SOURCE [1=Priya 2='Project Manager']  # list / name a recording's speakers (M9; summaries label only named ones)
 uv run granit verify [--data DIR]  # Guardian checks unverified answers + summaries (M8, Phase C; not while Q&A runs)
 uv run granit ui [--data DIR]  # the app: Ingest, Library, Ask, Extract (M6)
 uv run --group screenshots python scripts/ui_screenshots.py --data DIR  # §4.8 layout check (30 screenshots: 5 pages incl. a recording)

@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike step 1 (who spoke when) measured (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -713,9 +713,30 @@ speaker is the right one):
   TTS engine behind all of them. Real meetings don't look like this; the public set isn't a good diarization check.
 - **Cost is negligible:** ~1.3 GB and seconds per hour of audio, so it fits Phase A next to Speech + Docling + Vision (15.6 GB).
 
-**Step 2 (next):** speaker labels on transcript segments → the meeting summary. Diarization gives *Speaker 1–4*, not names, so
-owners need the summary prompt to resolve labels from how people address each other ("Priya, please send…" → "Will do."), or the user
-to name speakers in the Library.
+**Spike, step 2 (2026-10-08): speakers → action-item owners.** Each transcript word gets the speaker active around it (±0.1 s,
+else the nearest within 1 s); consecutive words of one speaker form a turn line. Summaries by the current prompt on scratch copies
+of the eval libraries, one variant per fresh `mlx_lm.server` (CLAUDE.md), scored with the eval's own `action_items`:
+
+| Transcript given to the summary | Public (3 meetings) | AMI ES2008b | AMI IB4003 |
+|---|---|---|---|
+| Plain lines (today) | 1.000 | 0.600 | 0.333 |
+| `Speaker N:` turns + rules to resolve labels to names | 1.000 (precision 0.89) | 0.400 | 0.333 |
+| **Turns with user-given names** (simulated: each speaker → the true one it overlaps most) | 0.833 | **0.800** (precision 1.0) | n/a |
+
+- **Unnamed labels don't help.** The 8B model writes `Speaker 1` as an owner despite the rule not to, and a label can't match
+  an owner. It often has the right person: in IB4003, "Speaker 1: find out whether rooms can be split" is the project manager's
+  task. But AMI's owners are roles nobody says aloud, so the transcript alone can't name them.
+- **Named speakers help real meetings:** in ES2008b all four role owners come out right (0.6 → 0.8; the miss has the right owner
+  but different wording). IB4003 has no roles in AMI's metadata, so naming can't be simulated there.
+- **A wrong speaker beats the text:** where diarization merged voices (`peak-season`: Marcus heard as Elena), the summary gave Elena
+  Marcus's task, though "Marcus, can you start the hiring? Sure, I'll post…" names him and plain text got it right (1.0 → 0.5).
+- Caveats: one real meeting with names, which was also in the model's training data; naming is simulated with the true mapping.
+
+**Recommendation (for decision):** build diarization as an ingest step with **user-named speakers**: Phase A stores a speaker per
+word in `transcript.json`; the Library lists each recording's speakers with a sample line or clip to name (and merge) them;
+summaries get name-labelled turns only once speakers are named, and plain lines otherwise. The eval needs speaker names per meeting
+(ES2008b's roles from AMI metadata; the public set's `say` voices), and the public set can't check diarization itself. Whether to
+build this as M9 is a scope decision for 1.x.
 
 ### 3.6 Documents: Docling + Granite Vision (built in M3)
 

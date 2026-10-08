@@ -6,6 +6,8 @@
   **one transaction**: a crash leaves no half-ingested source, and the job is retried.
 - Originals are stored once by content hash in ``files/<sha256><ext>``; derived outputs go to ``derived/<source_id>/``.
 - The schema is versioned with ``PRAGMA user_version`` and upgraded by ``MIGRATIONS`` on open.
+- ``verify`` jobs (Phase C, PLAN.md §2.4) have no source: they judge every answer and summary not yet verified, and write
+  ``verdicts`` one target per transaction.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from typing import Any
 from granit.store.text import search_text
 
 MAX_ATTEMPTS = 3  # a job that fails (or whose worker crashes) this many times stays failed
+INGEST_TASKS = ("ingest", "extract")  # Phase A; "verify" is Phase C
 
 MIGRATIONS: list[str] = [
     # 1: M4 store
@@ -124,6 +127,48 @@ MIGRATIONS: list[str] = [
         created_at TEXT NOT NULL
     );
     """,
+    # 3: M8 verify job (PLAN.md §2.4): jobs without a source, Guardian verdicts on answers and summaries.
+    # SQLite can't change a CHECK constraint, so jobs is rebuilt (migrate() turns foreign keys off for this).
+    """
+    CREATE TABLE jobs_new (
+        id INTEGER PRIMARY KEY,
+        task TEXT NOT NULL CHECK (task IN ('ingest', 'extract', 'verify')),
+        source_id INTEGER REFERENCES sources(id) ON DELETE CASCADE,
+        params TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'done', 'failed')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        started_at TEXT,
+        finished_at TEXT,
+        CHECK ((task = 'verify') = (source_id IS NULL))
+    );
+    INSERT INTO jobs_new SELECT * FROM jobs;
+    DROP TABLE jobs;
+    ALTER TABLE jobs_new RENAME TO jobs;
+    CREATE INDEX jobs_by_status ON jobs (status, id);
+    CREATE TABLE verdicts (
+        id INTEGER PRIMARY KEY,
+        turn_id INTEGER REFERENCES qa_turns(id) ON DELETE CASCADE,
+        extraction_id INTEGER REFERENCES extractions(id) ON DELETE CASCADE,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+        criterion_id TEXT NOT NULL,
+        criterion TEXT NOT NULL,
+        score TEXT CHECK (score IN ('yes', 'no')),
+        yes_means TEXT NOT NULL CHECK (yes_means IN ('risk', 'pass')),
+        passed INTEGER,
+        error TEXT,
+        mode TEXT NOT NULL CHECK (mode IN ('no-think', 'think')),
+        model TEXT NOT NULL,
+        raw TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        CHECK ((turn_id IS NULL) != (extraction_id IS NULL)),
+        CHECK ((passed IS NULL) = (score IS NULL))
+    );
+    CREATE UNIQUE INDEX verdicts_by_turn ON verdicts (turn_id, criterion_id) WHERE turn_id IS NOT NULL;
+    CREATE UNIQUE INDEX verdicts_by_extraction ON verdicts (extraction_id, criterion_id)
+        WHERE extraction_id IS NOT NULL;
+    """,
 ]
 
 
@@ -146,12 +191,28 @@ def connect(path: Path | str, check_same_thread: bool = True) -> sqlite3.Connect
 
 
 def migrate(conn: sqlite3.Connection) -> int:
+    """Apply pending migrations, each in one transaction.
+
+    Foreign keys are off while they run (SQLite's table-rebuild procedure): dropping a rebuilt parent table must not cascade
+    or set its children's references to NULL. ``foreign_key_check`` must come back clean before each commit.
+    """
     version = conn.execute("PRAGMA user_version").fetchone()[0]
-    for number, script in enumerate(MIGRATIONS[version:], start=version + 1):
-        with transaction(conn):
-            for statement in _statements(script):
-                conn.execute(statement)
-            conn.execute(f"PRAGMA user_version = {number}")
+    if version >= len(MIGRATIONS):
+        return len(MIGRATIONS)
+    enforced = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+    conn.execute("PRAGMA foreign_keys=OFF")  # a no-op inside a transaction, so set before BEGIN
+    try:
+        for number, script in enumerate(MIGRATIONS[version:], start=version + 1):
+            with transaction(conn):
+                for statement in _statements(script):
+                    conn.execute(statement)
+                if problems := conn.execute("PRAGMA foreign_key_check").fetchall():
+                    raise sqlite3.IntegrityError(
+                        f"migration {number} broke {len(problems)} foreign key(s)"
+                    )
+                conn.execute(f"PRAGMA user_version = {number}")
+    finally:
+        conn.execute(f"PRAGMA foreign_keys={'ON' if enforced else 'OFF'}")
     return len(MIGRATIONS)
 
 
@@ -204,7 +265,7 @@ class Source:
 class Job:
     id: int
     task: str
-    source_id: int
+    source_id: int | None  # None for verify jobs
     params: dict[str, Any]
     status: str
     attempts: int
@@ -216,6 +277,13 @@ class Job:
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> Job:
         return cls(**{**dict(row), "params": json.loads(row["params"])})
+
+    @property
+    def source(self) -> int:
+        """The source an ingest or extract job works on."""
+        if self.source_id is None:
+            raise ValueError(f"{self.task} job {self.id} has no source")
+        return self.source_id
 
 
 @dataclass(frozen=True)
@@ -247,6 +315,23 @@ class NewExtraction:
     schema: dict[str, Any] | None = None
     page: int | None = None
     crop: str | None = None
+
+
+@dataclass(frozen=True)
+class NewVerdict:
+    """One Guardian check of an answer (``turn_id``) or a summary (``extraction_id``). ``score`` None = error, never a pass."""
+
+    criterion_id: str
+    criterion: str  # the text Guardian judged against
+    yes_means: str  # risk | pass
+    score: str | None
+    passed: bool | None
+    model: str
+    turn_id: int | None = None
+    extraction_id: int | None = None
+    error: str | None = None
+    mode: str = "no-think"
+    raw: str = ""
 
 
 # ── the store ──
@@ -346,7 +431,16 @@ class Store:
             job_id = self._enqueue(source.id, "extract", {"schema": schema})
         return self.job(job_id)
 
-    def _enqueue(self, source_id: int, task: str, params: dict[str, Any]) -> int:
+    def enqueue_verify(self) -> Job:
+        """Queue a Guardian check of every answer and summary not verified yet (one queued verify job at a time)."""
+        with transaction(self.conn):
+            row = self.conn.execute(
+                "SELECT id FROM jobs WHERE task = 'verify' AND status = 'queued'"
+            ).fetchone()
+            job_id = row[0] if row else self._enqueue(None, "verify", {})
+        return self.job(job_id)
+
+    def _enqueue(self, source_id: int | None, task: str, params: dict[str, Any]) -> int:
         cursor = self.conn.execute(
             "INSERT INTO jobs (task, source_id, params, created_at) VALUES (?, ?, ?, ?)",
             (task, source_id, json.dumps(params), now()),
@@ -379,14 +473,23 @@ class Store:
         """Jobs for the UI, newest first: queued and running ones always, then the most recent finished ones."""
         return list(
             self.conn.execute(
-                "SELECT j.*, s.name AS source_name, s.kind AS source_kind FROM jobs j JOIN sources s ON s.id = j.source_id"
+                "SELECT j.*, s.name AS source_name, s.kind AS source_kind FROM jobs j"
+                " LEFT JOIN sources s ON s.id = j.source_id"
                 " ORDER BY j.status IN ('queued', 'running') DESC, j.id DESC LIMIT ?",
                 (limit,),
             )
         )
 
-    def queued_count(self) -> int:
-        return self.conn.execute("SELECT count(*) FROM jobs WHERE status = 'queued'").fetchone()[0]
+    def queued_count(self, tasks: Sequence[str] | None = None) -> int:
+        """Queued jobs (of ``tasks`` only, e.g. ``INGEST_TASKS``, when given)."""
+        if tasks is None:
+            return self.conn.execute(
+                "SELECT count(*) FROM jobs WHERE status = 'queued'"
+            ).fetchone()[0]
+        marks = ",".join("?" * len(tasks))
+        return self.conn.execute(
+            f"SELECT count(*) FROM jobs WHERE status = 'queued' AND task IN ({marks})", list(tasks)
+        ).fetchone()[0]
 
     def recover_interrupted(self) -> int:
         """Jobs left ``running`` by a worker that died go back to the queue (or fail after ``MAX_ATTEMPTS``)."""
@@ -405,16 +508,20 @@ class Store:
             )
         return failed + requeued
 
-    def claim_next(self, exclude: Sequence[int] = ()) -> Job | None:
-        """Atomically take the oldest queued job (``running``, attempts + 1), skipping ``exclude`` (failed this run)."""
+    def claim_next(
+        self, exclude: Sequence[int] = (), tasks: Sequence[str] = INGEST_TASKS
+    ) -> Job | None:
+        """Atomically take the oldest queued job of ``tasks`` (``running``, attempts + 1), skipping ``exclude`` (failed
+        this run). Each phase's worker claims only its own tasks."""
         # Never "NOT IN (NULL)": a comparison with NULL is unknown, so it would match no job at all.
         skip = f" AND id NOT IN ({','.join(str(int(i)) for i in exclude)})" if exclude else ""
+        marks = ",".join("?" * len(tasks))
         with transaction(self.conn):
             row = self.conn.execute(
                 "UPDATE jobs SET status = 'running', started_at = ?, attempts = attempts + 1"
-                " WHERE id = (SELECT id FROM jobs WHERE status = 'queued'"
+                f" WHERE id = (SELECT id FROM jobs WHERE status = 'queued' AND task IN ({marks})"
                 f"{skip} ORDER BY id LIMIT 1) RETURNING *",
-                (now(),),
+                (now(), *tasks),
             ).fetchone()
             if row is None:
                 return None
@@ -491,7 +598,7 @@ class Store:
                     "INSERT INTO chunk_vectors (chunk_id, model_revision, embedding) VALUES (?, ?, ?)",
                     (chunk_id, model_revision, vector_blob(vector)),
                 )
-            self._insert_extractions(job.id, job.source_id, extractions)
+            self._insert_extractions(job.id, job.source, extractions)
             self.conn.execute(
                 "UPDATE sources SET status = 'ready', info = ? WHERE id = ?",
                 (json.dumps(info or {}), job.source_id),
@@ -501,7 +608,7 @@ class Store:
 
     def complete_extract(self, job: Job, extraction: NewExtraction) -> None:
         with transaction(self.conn):
-            self._insert_extractions(job.id, job.source_id, [extraction])
+            self._insert_extractions(job.id, job.source, [extraction])
             self._finish(job)
 
     def _insert_extractions(
@@ -528,15 +635,103 @@ class Store:
                 ),
             )
 
-    def _finish(self, job: Job) -> None:
+    def _finish(self, job: Job, corpus_changed: bool = True) -> None:
         self.conn.execute(
             "UPDATE jobs SET status = 'done', error = NULL, finished_at = ? WHERE id = ?",
             (now(), job.id),
         )
-        # Phase B reloads its vector matrix when this changes (PLAN.md §2.3).
-        self.conn.execute(
-            "UPDATE meta SET value = CAST(value AS INTEGER) + 1 WHERE key = 'corpus_version'"
+        if corpus_changed:  # Phase B reloads its vector matrix when this changes (PLAN.md §2.3).
+            self.conn.execute(
+                "UPDATE meta SET value = CAST(value AS INTEGER) + 1 WHERE key = 'corpus_version'"
+            )
+
+    # verification (Phase C)
+
+    def record_verdicts(self, job: Job | None, verdicts: Sequence[NewVerdict]) -> None:
+        """One target's verdicts in one transaction, replacing earlier verdicts on the same criteria."""
+        with transaction(self.conn):
+            for v in verdicts:
+                self.conn.execute(
+                    "DELETE FROM verdicts WHERE criterion_id = ? AND (turn_id = ? OR extraction_id = ?)",
+                    (v.criterion_id, v.turn_id, v.extraction_id),
+                )
+                self.conn.execute(
+                    "INSERT INTO verdicts (turn_id, extraction_id, job_id, criterion_id, criterion, score, yes_means,"
+                    " passed, error, mode, model, raw, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        v.turn_id,
+                        v.extraction_id,
+                        job.id if job else None,
+                        v.criterion_id,
+                        v.criterion,
+                        v.score,
+                        v.yes_means,
+                        None if v.passed is None else int(v.passed),
+                        v.error,
+                        v.mode,
+                        v.model,
+                        v.raw[:500],
+                        now(),
+                    ),
+                )
+
+    def complete_verify(self, job: Job) -> None:
+        with transaction(self.conn):
+            self._finish(job, corpus_changed=False)
+
+    def turns_to_verify(self, criterion_ids: Sequence[str]) -> list[sqlite3.Row]:
+        """Answers (not declines) missing a verdict on any of ``criterion_ids``, oldest first."""
+        if not criterion_ids:
+            return []
+        marks = ",".join("?" * len(criterion_ids))
+        return list(
+            self.conn.execute(
+                "SELECT * FROM qa_turns t WHERE NOT t.declined AND (SELECT count(*) FROM verdicts v"
+                f" WHERE v.turn_id = t.id AND v.criterion_id IN ({marks})) < ? ORDER BY t.id",
+                (*criterion_ids, len(criterion_ids)),
+            )
         )
+
+    def summaries_to_verify(self, criterion_ids: Sequence[str]) -> list[sqlite3.Row]:
+        """Meeting summaries missing a verdict on any of ``criterion_ids``, oldest first."""
+        if not criterion_ids:
+            return []
+        marks = ",".join("?" * len(criterion_ids))
+        return list(
+            self.conn.execute(
+                "SELECT * FROM extractions e WHERE e.kind = 'summary' AND (SELECT count(*) FROM verdicts v"
+                f" WHERE v.extraction_id = e.id AND v.criterion_id IN ({marks})) < ? ORDER BY e.id",
+                (*criterion_ids, len(criterion_ids)),
+            )
+        )
+
+    def verdicts(
+        self, *, turn_ids: Sequence[int] = (), extraction_ids: Sequence[int] = ()
+    ) -> dict[tuple[str, int], list[sqlite3.Row]]:
+        """Verdicts keyed by ``("turn", id)`` / ``("extraction", id)``, in criterion order of recording."""
+        out: dict[tuple[str, int], list[sqlite3.Row]] = {}
+        for column, ids in (("turn_id", turn_ids), ("extraction_id", extraction_ids)):
+            if not ids:
+                continue
+            marks = ",".join("?" * len(ids))
+            for row in self.conn.execute(
+                f"SELECT * FROM verdicts WHERE {column} IN ({marks}) ORDER BY id", list(ids)
+            ):
+                out.setdefault((column.removesuffix("_id"), row[column]), []).append(row)
+        return out
+
+    def summary_criteria(self) -> list[str] | None:
+        """The user's custom summary checks (None: never set, so the defaults apply)."""
+        row = self.conn.execute("SELECT value FROM meta WHERE key = 'summary_criteria'").fetchone()
+        return json.loads(row[0]) if row else None
+
+    def set_summary_criteria(self, texts: Sequence[str]) -> None:
+        with transaction(self.conn):
+            self.conn.execute(
+                "INSERT INTO meta (key, value) VALUES ('summary_criteria', ?)"
+                " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                (json.dumps(list(texts), ensure_ascii=False),),
+            )
 
     # Q&A history and Phase B outputs
 

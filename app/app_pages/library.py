@@ -1,8 +1,9 @@
 """Library: everything ingested, and what's inside each file (PLAN.md §2.3, §4.8).
 
 The table stretches to the window (more columns on big monitors); text (transcripts, document Markdown) stays at reading
-width. Recordings get a meeting summary (decisions + action items, Phase B); documents show their Markdown, the tables and
-charts Granite Vision read, and their form extractions.
+width. Recordings get a meeting summary (decisions + action items, Phase B) and Granite Guardian's checks of it against the
+library's summary criteria (Phase C, PLAN.md §2.4); documents show their Markdown, the tables and charts Granite Vision read,
+and their form extractions.
 """
 
 import io
@@ -24,12 +25,15 @@ from granit.ui.views import (
     model_label,
     other_vocabulary,
     read_json,
+    save_summary_criteria,
     source_param,
     stamp,
+    summary_checks,
+    summary_criteria_text,
     transcript_md,
 )
 
-BadgeColor = Literal["green", "blue", "red", "gray"]
+BadgeColor = Literal["green", "blue", "orange", "red", "gray"]
 STATUS_COLOR: dict[str, BadgeColor] = {
     "ready": "green",
     "queued": "blue",
@@ -118,6 +122,51 @@ def show_summary(source: Source) -> None:
     st.caption(
         f"Summarized {safe_md(stamp(row['created_at']))} UTC by {safe_md(model_label(row['model']))}"
     )
+    show_checks(row["id"])
+
+
+CHECK_COLOR: dict[str, BadgeColor] = {"met": "green", "not met": "orange"}
+
+
+def show_checks(extraction_id: int) -> None:
+    """Guardian's verdicts on this summary, one per criterion; the criteria are the library's and editable here."""
+    st.markdown("**Checks**")
+    checks = summary_checks(store, extraction_id)
+    for c in checks:
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            st.badge(
+                safe_md(c["Result"]), color=CHECK_COLOR.get(c["Result"], "gray"), width="content"
+            )
+            st.markdown(safe_md(c["Check"]))
+    if not checks:
+        st.caption("No checks set: add some below.")
+    with st.container(horizontal=True, vertical_alignment="center"):
+        if st.button(
+            "Check with Guardian",
+            icon=":material/fact_check:",
+            disabled=all(c["Result"] != "not checked yet" for c in checks),
+            help="Queues a Guardian check of every summary and answer not checked yet. It runs with the next batch:"
+            " after a minute without questions, or now with **Process now** on the Ingest page.",
+        ):
+            store.enqueue_verify()
+            st.toast(
+                "Guardian will check this summary with the next batch.",
+                icon=":material/fact_check:",
+            )
+    with st.expander("Edit the checks"):
+        st.caption(
+            "One requirement per line, written so that *yes* means it's met. They apply to every meeting summary."
+            " Guardian's custom checks need testing: if a verdict looks wrong, reword the check."
+        )
+        text = st.text_area(
+            "Summary checks",
+            summary_criteria_text(store),
+            label_visibility="collapsed",
+            key=f"summary_criteria_{extraction_id}",
+        )
+        if st.button("Save checks", icon=":material/save:"):
+            save_summary_criteria(store, text)
+            st.rerun()
 
 
 def show_vision(source: Source) -> None:

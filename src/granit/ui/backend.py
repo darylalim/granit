@@ -27,8 +27,11 @@ from granit.models.phases import Phase, PhaseManager
 from granit.store.db import Source, Store
 
 TICK_S = 2.0
-# Another granit process holding Phase A (or a bench): wait for it before starting Q&A.
-OTHER_PHASE_PATTERN = r"granit\.ingest\.worker|granit\.bench\.workers|granit (ingest|extract|transcribe|convert|bench)"
+# Another granit process holding Phase A or C (or a bench): wait for it before starting Q&A.
+OTHER_PHASE_PATTERN = (
+    r"granit\.ingest\.worker|granit\.verify\.worker|granit\.bench\.workers"
+    r"|granit (ingest|extract|transcribe|convert|bench|verify)"
+)
 
 
 def other_phase_running() -> str | None:

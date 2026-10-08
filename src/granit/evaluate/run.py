@@ -38,7 +38,7 @@ from granit.evaluate.controls import caught, is_control, make_controls
 from granit.evaluate.dataset import EvalSet
 from granit.models.phases import PhaseManager, run_worker_process
 from granit.search.hybrid import MODES, Hit
-from granit.store.db import Source, Store
+from granit.store.db import INGEST_TASKS, Source, Store
 
 LIBRARIES = DATA_DIR / "eval" / "libraries"
 TABLE_WIN = 0.03  # §4.9: Vision must beat Docling by 3 points of cell F1
@@ -169,8 +169,8 @@ class Runner:
         try:
             timings: dict[str, float] = {}
             extract_jobs = self._queue(store)
-            if store.queued_count():
-                self.log(f"Phase A: ingesting and extracting ({store.queued_count()} jobs)…")
+            if queued := store.queued_count(INGEST_TASKS):
+                self.log(f"Phase A: ingesting and extracting ({queued} jobs)…")
                 start = time.perf_counter()
                 self.run_worker(self.library, self.log)
                 timings["phase_a_s"] = round(time.perf_counter() - start, 1)

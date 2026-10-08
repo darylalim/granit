@@ -67,6 +67,23 @@ def judge_messages(criterion: str, question: str, answer: str) -> list[dict[str,
     ]
 
 
+def fit_prompt(
+    tokenizer: Any, messages: list[dict[str, Any]], documents: list[str], budget: int
+) -> str:
+    """The chat-templated prompt, with ``documents`` dropped from the end until it fits ``budget`` tokens."""
+    documents = list(documents)
+    while True:
+        kwargs: dict[str, Any] = {}
+        if documents:
+            kwargs["documents"] = [{"doc_id": str(i), "text": t} for i, t in enumerate(documents)]
+        prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, **kwargs
+        )
+        if not documents or len(tokenizer.encode(prompt)) <= budget:
+            return prompt
+        documents.pop()
+
+
 def passed(score: str | None) -> bool | None:
     """Risk criteria: "no" (problem absent) passes, "yes" fails, anything else is an error (None)."""
     return {"no": True, "yes": False}.get(score or "")

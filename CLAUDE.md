@@ -20,7 +20,7 @@ uv run granit search "question" [--mode bm25|vectors|hybrid|hybrid+rerank] [--js
 uv run granit sources  # the library
 uv run granit ask "question" [--thinking off|low|on]  # cited answer (M5; starts Q&A if needed)
 uv run granit meeting SOURCE  # meeting summary JSON (M5)
-uv run granit speakers SOURCE [1=Priya 2='Project Manager']  # list / name a recording's speakers (M9; summaries label only named ones)
+uv run granit speakers SOURCE [1=Priya 2='Project Manager']  # list / name a recording's speakers (M9; summaries label only named ones; M10: naming queues a `reindex` so search and Ask see the names, `granit ingest` with no files runs it)
 uv run granit verify [--data DIR]  # Guardian checks unverified answers + summaries (M8, Phase C; not while Q&A runs)
 uv run granit ui [--data DIR]  # the app: Ingest, Library, Ask, Extract (M6)
 uv run --group screenshots python scripts/ui_screenshots.py --data DIR  # §4.8 layout check (30 screenshots: 5 pages incl. a recording)
@@ -53,6 +53,11 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **Speakers (PLAN.md §3.7):** only user-named speakers are labelled for the LLM; with no names, summary lines and prompt are today's byte for byte (`test_reason.py` checks). The model never maps `Speaker N` to a name.
 - **Local builds are auto-detected** (`IngestWorker(diarizer=AUTO)`, `Runner(diarization=None)`): unit tests must pin them off (`diarizer=None`, `diarization=False`) or real weights load on a Mac where they're built.
 - **Model-test memory:** `pytest -m model` runs in one process, so `mx.get_peak_memory()` includes earlier tests' models; assert the increase over `mx.get_active_memory()`, or measure in its own process.
+- **Speaker names in chunks (M10, PLAN.md §3.8):** `set_speaker_names` queues a `reindex` only when the names *change*. A change that
+  must reach recordings already named (chunk format, schema) needs a migration that queues `reindex` jobs (as migration 5 does).
+- **Eval result files are named `<date>-<sha>[-dirty]-<set>.json`:** a second run on the same commit overwrites the first. Copy the
+  baseline file before re-running for an A/B.
+- **The Bash tool's shell is zsh:** `$var` isn't word-split (`set -- $spec` passes one argument). Write arguments out, or use `${=var}`.
 - **`eval compare` flags:** confirm with a fresh-process A/B before blaming a change; `*.s_per_table` timing rows flag at +0.02 s (noise); re-running `fetch_real_eval.py` rewrites the private set's references and schemas, so the next run isn't comparable on those metrics.
 - **Hook H3 matches the banned speech-model name anywhere in a Bash command**, heredoc text included: put scripted edits that mention it in a script file and run that.
 - **Screenshots of Streamlit pages:** `full_page=True` captures only the viewport (the app scrolls an inner container); screenshot an element (`page.locator("[data-testid=stExpander]")`) instead.

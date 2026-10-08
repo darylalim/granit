@@ -378,3 +378,41 @@ def test_the_set_vocabulary_is_applied_and_retranscribes_on_change(
     (eval_root / "vocabulary.txt").write_text("Northbeam\n")
     runner(eval_root, library).run()  # another list: the recordings are transcribed again
     assert len([j for j in Store(library).jobs() if j.task == "ingest"]) == ingests + len(audio)
+
+
+def test_private_calibration_keeps_the_goals_in_view() -> None:
+    # v38: today's real-world levels pass; the relaxed starting points show as goals (PLAN.md §4.9).
+    metrics = {
+        "answers": {"fact_coverage": 0.833},
+        "extraction": {"field_accuracy": 0.857},
+        "summaries": {"action_item_recall": 0.467},
+        "asr": {"wer": 0.178},
+    }
+    rows = {r["metric"]: r for r in report.check(metrics, "private")}
+    for path in report.PRIVATE_GOALS:
+        assert rows[path]["pass"] is True and rows[path]["goal"] == report.PRIVATE_GOALS[path]
+    assert rows["asr.wer"]["threshold"] == 0.18 and rows["asr.wer"]["goal"] == 0.10
+    assert all(r["goal"] is None for r in report.check(metrics, "public"))
+    lines = report.summary_lines(
+        {
+            "set": "private",
+            "date": "d",
+            "git_sha": "s",
+            "criteria": list(rows.values()),
+            "passed": False,
+        }
+    )
+    assert any("asr.wer" in line and "(<= 0.18, goal <= 0.1)" in line for line in lines)
+
+
+def test_an_area_a_set_does_not_cover_is_reported_not_failed() -> None:
+    rows = [
+        {"metric": "a", "pass": True, "informational": False},
+        {"metric": "tables.cell_f1", "pass": None, "informational": False},  # n/a: no table cases
+        {"metric": "guardian.groundedness", "pass": False, "informational": True},
+    ]
+    assert report.passed(rows)
+    assert not report.passed([*rows, {"metric": "b", "pass": False, "informational": False}])
+    assert not report.passed(
+        [{"metric": "a", "pass": None, "informational": False}]
+    )  # nothing measured

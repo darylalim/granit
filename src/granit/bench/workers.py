@@ -114,6 +114,11 @@ def phase_a(hold: bool, quick: bool) -> Details:
         loads, "vision", lambda: load_vlm(str(vision_path))
     )
     embedder = _load_timed(loads, "embedding", load_embedder)
+    diarizer = None
+    if LOCAL_MODELS["diarization"].is_built():  # M9 (PLAN.md §3.7): part of Phase A once built
+        from granit.ingest.speakers import Diarizer
+
+        diarizer = _load_timed(loads, "diarization", lambda: Diarizer().load())
     loads["total"] = round(time.perf_counter() - start, 2)
     after_load = _memory()
     if hold:
@@ -133,6 +138,8 @@ def phase_a(hold: bool, quick: bool) -> Details:
 
     with tempfile.TemporaryDirectory() as tmp:
         stage("audio", lambda: _audio_workload(speech, vad, Path(tmp), seconds=20 if quick else 60))
+        if diarizer is not None:
+            stage("speakers", lambda: _speakers_workload(diarizer, Path(tmp) / "meeting.wav"))
         stage("docling", lambda: _docling_workload(converter, Path(tmp)))
     stage(
         "vision",
@@ -147,6 +154,20 @@ def phase_a(hold: bool, quick: bool) -> Details:
         "workload": work,
         "memory_by_stage": stage_memory,
         "memory": _memory(mlx_peak_gb=mlx_peak_gb(), mps_gb=mps_allocated_gb()),
+    }
+
+
+def _speakers_workload(diarizer: Any, wav: Path) -> Details:
+    from granit.ingest.audio import decode
+
+    audio = decode(wav)
+    start = time.perf_counter()
+    probs, _ = diarizer.probabilities(audio)
+    seconds = time.perf_counter() - start
+    return {
+        "audio_s": round(len(audio) / SAMPLE_RATE, 1),
+        "seconds": round(seconds, 2),
+        "frames": len(probs),
     }
 
 

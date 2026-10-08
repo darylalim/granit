@@ -5,10 +5,12 @@
 Private, fully local document & meeting intelligence on Apple Silicon. IBM Granite models (speech, Docling,
 vision, 8B LLM, embeddings, reranker, Guardian) on MLX, with hybrid search, cited answers and a Streamlit UI.
 
-> **Status:** 1.2. All v1 milestones (M0–M7) are built: transcription, document conversion, form extraction,
+> **Status:** 1.3. All v1 milestones (M0–M7) are built: transcription, document conversion, form extraction,
 > hybrid search, cited answers, meeting summaries, the Streamlit app and the evaluation harness. 1.1 adds M8, the Guardian
 > verify job (`granit verify`, groundedness badges in Ask and Library). 1.2 adds M9, speakers: who spoke when, named by you
-> in the Library, so meeting summaries can give action items an owner (`granit speakers`). Both evaluation sets
+> in the Library, so meeting summaries can give action items an owner (`granit speakers`). 1.3 adds M10: named speakers
+> reach search and Ask ("What did Priya agree to do?"), and tables in digital PDFs get their row labels checked against the
+> PDF's own text. Both evaluation sets
 > pass the 1.0 quality criteria ([PLAN.md](PLAN.md) §4.9, with the private set's goals for 1.x). See PLAN.md for the full design.
 
 ## What it does (v1)
@@ -20,7 +22,8 @@ vision, 8B LLM, embeddings, reranker, Guardian) on MLX, with hybrid search, cite
 5. **Answer checks** (1.1): Granite Guardian checks whether answers are supported by their sources, and meeting summaries
    against requirements you write.
 6. **Speakers** (1.2): who spoke when in each recording. Name the speakers you recognize in the Library and meeting summaries
-   use the names for action-item owners; unnamed speakers stay unlabelled.
+   use the names for action-item owners; unnamed speakers stay unlabelled. Since 1.3, search and Ask use the names too, so
+   you can ask who said what.
 
 Everything runs locally. The only network traffic is the one-time model download from Hugging Face.
 

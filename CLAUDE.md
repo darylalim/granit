@@ -46,9 +46,12 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **Phases:** the UI talks to the LLM only through `PhaseManager` (`models/phases.py`): wrap each answer in `phases.chat()`, call `tick()` periodically, `process_now()` for the button. Never start `mlx_lm.server` or the worker directly from UI code.
 - **No models in the Streamlit process**, except the query embedder + reranker behind a lock (PLAN.md §2.2).
 - **Never touch** `data/` (user data) or `models/` (weights). Both are gitignored and protected by hook H2.
-- **Releases come only from CI** (PLAN.md §4.3): bump with `uv version --bump …`, merge a PR. No local tags or `gh release`.
+- **Releases come only from CI** (PLAN.md §4.3): bump with `uv version --bump …`, merge a PR. No local tags or `gh release create`;
+  `gh release edit` on a published release only when the user asks. Titles are the bare tag (`v1.3.0`, no `--title`).
+- **PLAN.md §4.3 quotes `ci.yml`'s release step:** edit both together.
 - **Prompt A/B:** run each variant in its own fresh process (`cli._llm_server()` + patched prompt): `mlx_lm.server`'s prompt cache makes temperature-0 output depend on earlier requests (same prompt 0.467 vs 0.383 by order).
 - **Stacked PRs:** `gh pr merge --delete-branch` on the base closes the PR stacked on it (no retarget). Base PRs on `main`, or merge `main` into the stacked branch and open a new PR.
+  PRs are squash-merged (`--squash --delete-branch`, which also deletes the local branch); find leftover branches by `[gone]` in `git branch -vv`, not `--merged`.
 - **Model tests after long eval runs:** the answer-latency checks (`MAX_ANSWER_S`) can fail under load; re-run `tests/models/test_reasoning.py` alone before suspecting the change.
 - **Speakers (PLAN.md §3.7):** only user-named speakers are labelled for the LLM; with no names, summary lines and prompt are today's byte for byte (`test_reason.py` checks). The model never maps `Speaker N` to a name.
 - **Local builds are auto-detected** (`IngestWorker(diarizer=AUTO)`, `Runner(diarization=None)`): unit tests must pin them off (`diarizer=None`, `diarization=False`) or real weights load on a Mac where they're built.

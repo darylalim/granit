@@ -182,6 +182,13 @@ class Runner:
             sources = {s.sha256: s for s in store.sources()}
             failed = [s.name for s in sources.values() if s.status != "ready"]
             speakers = self._name_speakers(store, sources)
+            if queued := store.queued_count(
+                ["reindex"]
+            ):  # named speakers reach search (PLAN.md §3.8)
+                self.log(f"Phase A: reindexing {queued} named recordings…")
+                start = time.perf_counter()
+                self.run_worker(self.library, self.log)
+                timings["reindex_s"] = round(time.perf_counter() - start, 1)
 
             self.log("Phase B: retrieval, answers and summaries…")
             start = time.perf_counter()
@@ -406,14 +413,16 @@ class Runner:
     def _answers(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
         answerable = [r for r in rows if r["category"] != "unanswerable"]
         unanswerable = [r for r in rows if r["category"] == "unanswerable"]
+        # speaker questions are informational (PLAN.md §3.8): reported by category, outside the headline fact coverage
+        scored = [r for r in answerable if r["category"] != "speaker"]
         return {
-            "fact_coverage": m.mean([r["facts"] for r in answerable]),
+            "fact_coverage": m.mean([r["facts"] for r in scored]),
             "citation_precision": m.mean([r["citation_precision"] for r in answerable]),
             "unanswerable_declined": m.mean([float(r["declined"]) for r in unanswerable]),
             "false_declines": m.mean([float(r["declined"]) for r in answerable]),
             "by_category": {
                 c: {"fact_coverage": m.mean([r["facts"] for r in answerable if r["category"] == c])}
-                for c in ("document", "meeting", "cross-source")
+                for c in ("document", "meeting", "cross-source", "speaker")
             },
         }
 

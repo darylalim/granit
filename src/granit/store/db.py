@@ -26,7 +26,7 @@ from typing import Any
 from granit.store.text import search_text
 
 MAX_ATTEMPTS = 3  # a job that fails (or whose worker crashes) this many times stays failed
-INGEST_TASKS = ("ingest", "extract")  # Phase A; "verify" is Phase C
+INGEST_TASKS = ("ingest", "extract", "reindex")  # Phase A; "verify" is Phase C
 
 MIGRATIONS: list[str] = [
     # 1: M4 store
@@ -178,6 +178,30 @@ MIGRATIONS: list[str] = [
         name TEXT NOT NULL CHECK (name != ''),
         PRIMARY KEY (source_id, speaker)
     );
+    """,
+    # 5: M10 speakers in search (PLAN.md §3.8): a `reindex` job rebuilds a recording's chunks with its speaker names.
+    # The task CHECK changes, so jobs is rebuilt again (as in 3). Recordings named under M9 get a reindex now: their names
+    # are already stored, so saving them again wouldn't queue one.
+    """
+    CREATE TABLE jobs_new (
+        id INTEGER PRIMARY KEY,
+        task TEXT NOT NULL CHECK (task IN ('ingest', 'extract', 'verify', 'reindex')),
+        source_id INTEGER REFERENCES sources(id) ON DELETE CASCADE,
+        params TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'done', 'failed')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        started_at TEXT,
+        finished_at TEXT,
+        CHECK ((task = 'verify') = (source_id IS NULL))
+    );
+    INSERT INTO jobs_new SELECT * FROM jobs;
+    DROP TABLE jobs;
+    ALTER TABLE jobs_new RENAME TO jobs;
+    CREATE INDEX jobs_by_status ON jobs (status, id);
+    INSERT INTO jobs (task, source_id, params, created_at)
+        SELECT DISTINCT 'reindex', source_id, '{}', strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now') FROM speaker_names;
     """,
 ]
 
@@ -427,8 +451,13 @@ class Store:
 
     def queue_ingest(self, source: Source, params: dict[str, Any] | None = None) -> Job:
         """Ingest a stored file again (e.g. with accurate tables). Its current chunks stay searchable until the new ones
-        replace them in one transaction. A queued or running ingest of the same source is returned instead of a second one."""
+        replace them in one transaction. A queued or running ingest of the same source is returned instead of a second one;
+        a queued ``reindex`` is dropped (the ingest rebuilds the chunks and clears the names)."""
         with transaction(self.conn):
+            self.conn.execute(
+                "DELETE FROM jobs WHERE source_id = ? AND task = 'reindex' AND status = 'queued'",
+                (source.id,),
+            )
             row = self.conn.execute(
                 "SELECT id FROM jobs WHERE source_id = ? AND task = 'ingest' AND status IN ('queued', 'running')",
                 (source.id,),
@@ -580,41 +609,62 @@ class Store:
         if len(vectors) != len(chunks):
             raise ValueError(f"{len(chunks)} chunks but {len(vectors)} vectors")
         with transaction(self.conn):
-            self.conn.execute("DELETE FROM chunks WHERE source_id = ?", (job.source_id,))
             self.conn.execute("DELETE FROM speaker_names WHERE source_id = ?", (job.source_id,))
             self.conn.execute(
                 "DELETE FROM extractions WHERE source_id = ? AND kind != 'form'", (job.source_id,)
             )
-            ids = []
-            for seq, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):
-                cursor = self.conn.execute(
-                    "INSERT INTO chunks (source_id, seq, text, context, search_text, element, page_start, page_end,"
-                    " start_s, end_s) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        job.source_id,
-                        seq,
-                        chunk.text,
-                        chunk.context,
-                        search_text(chunk.search_body),
-                        chunk.element,
-                        chunk.page_start,
-                        chunk.page_end,
-                        chunk.start_s,
-                        chunk.end_s,
-                    ),
-                )
-                chunk_id = int(cursor.lastrowid or 0)
-                ids.append(chunk_id)
-                self.conn.execute(
-                    "INSERT INTO chunk_vectors (chunk_id, model_revision, embedding) VALUES (?, ?, ?)",
-                    (chunk_id, model_revision, vector_blob(vector)),
-                )
+            ids = self._replace_chunks(job.source, chunks, vectors, model_revision)
             self._insert_extractions(job.id, job.source, extractions)
             self.conn.execute(
                 "UPDATE sources SET status = 'ready', info = ? WHERE id = ?",
                 (json.dumps(info or {}), job.source_id),
             )
             self._finish(job)
+        return ids
+
+    def complete_reindex(
+        self, job: Job, chunks: Sequence[NewChunk], vectors: Any, model_revision: str
+    ) -> list[int]:
+        """A recording's chunks rebuilt with its speaker names (PLAN.md §3.8), in one transaction."""
+        if len(vectors) != len(chunks):
+            raise ValueError(f"{len(chunks)} chunks but {len(vectors)} vectors")
+        with transaction(self.conn):
+            ids = self._replace_chunks(job.source, chunks, vectors, model_revision)
+            self.conn.execute(
+                "UPDATE sources SET info = json_set(info, '$.chunks', ?) WHERE id = ?",
+                (len(chunks), job.source_id),
+            )
+            self._finish(job)
+        return ids
+
+    def _replace_chunks(
+        self, source_id: int, chunks: Sequence[NewChunk], vectors: Any, model_revision: str
+    ) -> list[int]:
+        self.conn.execute("DELETE FROM chunks WHERE source_id = ?", (source_id,))
+        ids = []
+        for seq, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):
+            cursor = self.conn.execute(
+                "INSERT INTO chunks (source_id, seq, text, context, search_text, element, page_start, page_end,"
+                " start_s, end_s) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    source_id,
+                    seq,
+                    chunk.text,
+                    chunk.context,
+                    search_text(chunk.search_body),
+                    chunk.element,
+                    chunk.page_start,
+                    chunk.page_end,
+                    chunk.start_s,
+                    chunk.end_s,
+                ),
+            )
+            chunk_id = int(cursor.lastrowid or 0)
+            ids.append(chunk_id)
+            self.conn.execute(
+                "INSERT INTO chunk_vectors (chunk_id, model_revision, embedding) VALUES (?, ?, ?)",
+                (chunk_id, model_revision, vector_blob(vector)),
+            )
         return ids
 
     def complete_extract(self, job: Job, extraction: NewExtraction) -> None:
@@ -807,11 +857,22 @@ class Store:
         return {int(r["speaker"]): r["name"] for r in rows}
 
     def set_speaker_names(self, source: Source, names: Mapping[int, str]) -> dict[int, str]:
-        """Replace the recording's speaker names; blank names unname a speaker. Returns what was stored."""
+        """Replace the recording's speaker names; blank names unname a speaker. Returns what was stored. A change queues
+        a ``reindex`` (PLAN.md §3.8) so search and Ask see the names; it reads the names when it runs, so one queued job
+        is enough, and none is needed while the recording is being ingested (that clears its names)."""
         cleaned = {int(k): " ".join(v.split()) for k, v in names.items() if v and v.strip()}
         if any(k < 1 for k in cleaned):
             raise ValueError(f"speakers are numbered from 1, got {sorted(cleaned)}")
+        if cleaned == self.speaker_names(source.id):
+            return cleaned
         with transaction(self.conn):
+            pending = self.conn.execute(
+                "SELECT 1 FROM jobs WHERE source_id = ? AND status = 'queued' AND task IN ('ingest', 'reindex')"
+                " UNION SELECT 1 FROM jobs WHERE source_id = ? AND status = 'running' AND task = 'ingest'",
+                (source.id, source.id),
+            ).fetchone()
+            if pending is None:
+                self._enqueue(source.id, "reindex", {})
             self.conn.execute("DELETE FROM speaker_names WHERE source_id = ?", (source.id,))
             self.conn.executemany(
                 "INSERT INTO speaker_names (source_id, speaker, name) VALUES (?, ?, ?)",

@@ -233,3 +233,44 @@ def test_without_a_diarizer_recordings_have_no_speakers(store: Store) -> None:
     audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
     assert not worker(store).run(log=lambda _: None).failed
     assert "speakers" not in store.source(audio.id).info
+
+
+class NoModels:
+    """A reindex must not load Speech, Docling or Vision (PLAN.md §3.8)."""
+
+    def __getattr__(self, name: str) -> Any:
+        raise AssertionError(f"reindex touched {name}")
+
+
+def test_naming_speakers_reindexes_the_recordings_chunks(store: Store) -> None:
+    store.set_vocabulary(["Northbeam"])  # words: renew Northbeam (speaker 1) today. (speaker 2)
+    audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
+    assert (
+        not worker(store, transcriber=WordsTranscriber(), diarizer=FakeDiarizer())
+        .run(log=lambda _: None)
+        .failed
+    )
+    before = [c["text"] for c in store.conn.execute("SELECT text FROM chunks")]
+    assert before == ["renew Northbeam today."]  # no names: today's chunks
+    version = store.corpus_version()
+
+    store.set_speaker_names(store.source(audio.id), {2: "Priya"})
+    store.set_speaker_names(
+        store.source(audio.id), {2: "Priya", 1: "Elena"}
+    )  # one queued job is enough
+    assert store.queued_count(["reindex"]) == 1
+    report = worker(store, transcriber=NoModels(), documents=NoModels()).run(log=lambda _: None)
+    assert not report.failed and len(report.done) == 1
+    texts = [c["text"] for c in store.conn.execute("SELECT text FROM chunks")]
+    assert texts == ["Elena: renew Northbeam\nPriya: today."]
+    assert store.corpus_version() == version + 1  # Phase B reloads its vectors
+    assert store.source(audio.id).info["chunks"] == 1
+    hits = store.conn.execute(
+        "SELECT rowid FROM chunks_fts WHERE chunks_fts MATCH 'priya'"
+    ).fetchall()
+    assert len(hits) == 1  # search finds the name
+
+    store.set_speaker_names(
+        store.source(audio.id), {2: "Priya", 1: "Elena"}
+    )  # unchanged: nothing queued
+    assert store.queued_count(["reindex"]) == 0

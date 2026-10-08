@@ -24,6 +24,8 @@ uv run granit ui [--data DIR]  # the app: Ingest, Library, Ask, Extract (M6)
 uv run --group screenshots python scripts/ui_screenshots.py --data DIR  # §4.8 layout check (24 screenshots)
 uv run granit eval run --set public|private [--no-judge] [--fresh]  # quality eval (M7, ~15 min); results in eval/results/
 uv run granit eval compare A.json B.json  # flags regressions ≥ 2 points; run before merging model/prompt/retrieval changes
+uv run granit eval run --set public --fresh  # needed after ingest/chunking/ASR changes or regenerating eval/public (every file's sha changes)
+cp -R data/eval/libraries/private $SCRATCH/lib && uv run granit meeting 1 --data $SCRATCH/lib  # experiment on a copy, never the eval library
 uv run python scripts/make_eval_fixtures.py  # regenerate the public eval set (never hand-edit eval/public/)
 uv run granit bench [SCENARIO…] [--quick]  # M1 benchmarks (~15 min); results in bench/results/
 ```
@@ -43,6 +45,9 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **No models in the Streamlit process**, except the query embedder + reranker behind a lock (PLAN.md §2.2).
 - **Never touch** `data/` (user data) or `models/` (weights). Both are gitignored and protected by hook H2.
 - **Releases come only from CI** (PLAN.md §4.3): bump with `uv version --bump …`, merge a PR. No local tags or `gh release`.
+- **Prompt A/B:** run each variant in its own fresh process (`cli._llm_server()` + patched prompt): `mlx_lm.server`'s prompt cache makes temperature-0 output depend on earlier requests (same prompt 0.467 vs 0.383 by order).
+- **Stacked PRs:** `gh pr merge --delete-branch` on the base closes the PR stacked on it (no retarget). Base PRs on `main`, or merge `main` into the stacked branch and open a new PR.
+- **Model tests after long eval runs:** the answer-latency checks (`MAX_ANSWER_S`) can fail under load; re-run `tests/models/test_reasoning.py` alone before suspecting the change.
 - `config.py` and `.claude/hooks/*` are standard library only (hooks run with the system `python3`, 3.11+).
 
 ## Layout

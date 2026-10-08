@@ -1,0 +1,1337 @@
+{
+  "set": "public",
+  "date": "2026-10-08",
+  "git_sha": "f72d18c",
+  "config": {
+    "retrieval": "hybrid+rerank",
+    "k": 8,
+    "thinking": "low",
+    "judge": false,
+    "models": {
+      "speech": "ibm-granite/granite-speech-5.0-470m-turboctc@947f59a",
+      "vad": "mlx-community/silero-vad-v6@2ebf4a5",
+      "docling": "ibm-granite/granite-docling-258M-mlx@e9939db",
+      "vision": "ibm-granite/granite-vision-4.1-4b@37d591f",
+      "llm": "ibm-granite/granite-4.2-8b-q8-mlx@a60999a",
+      "embedding": "ibm-granite/granite-embedding-english-r2@47ea694",
+      "reranker": "ibm-granite/granite-embedding-reranker-english-r2@d09d3d6",
+      "guardian-source": "ibm-granite/granite-guardian-4.1-8b@ab01ccc",
+      "diarization-source": "nvidia/Nemotron-3-Diarization@f667ed7",
+      "guardian": "granite-guardian-4.1-8b-q8-mlx (built from guardian-source)",
+      "diarization": "nemotron-3-diarization-mlx (built from diarization-source)"
+    }
+  },
+  "metrics": {
+    "retrieval": {
+      "bm25": {
+        "recall@8": 1.0,
+        "mrr@8": 0.9359
+      },
+      "vectors": {
+        "recall@8": 1.0,
+        "mrr@8": 0.9222
+      },
+      "hybrid": {
+        "recall@8": 1.0,
+        "mrr@8": 0.9423
+      },
+      "hybrid+rerank": {
+        "recall@8": 1.0,
+        "mrr@8": 0.9295
+      }
+    },
+    "answers": {
+      "fact_coverage": 1.0,
+      "citation_precision": 0.9615,
+      "unanswerable_declined": 1.0,
+      "false_declines": 0.0,
+      "by_category": {
+        "document": {
+          "fact_coverage": 1.0
+        },
+        "meeting": {
+          "fact_coverage": 1.0
+        },
+        "cross-source": {
+          "fact_coverage": 1.0
+        }
+      }
+    },
+    "guardian": {
+      "controls": {
+        "made": 0,
+        "caught": null,
+        "caught_number": null,
+        "caught_swap": null
+      },
+      "groundedness": null,
+      "answer_relevance": null,
+      "errors": 0,
+      "judged": 0,
+      "agreement": 0.92
+    },
+    "extraction": {
+      "field_accuracy": 0.9839,
+      "documents_all_correct": 0.9,
+      "invalid": 0,
+      "wrong_fields": {
+        "exp-01": [
+          "approved_by"
+        ]
+      }
+    },
+    "tables": {
+      "docling": {
+        "cell_f1": 0.7474,
+        "s_per_table": 1.2712
+      },
+      "vision": {
+        "cell_f1": 0.9253,
+        "s_per_table": 10.56
+      },
+      "default": {
+        "cell_f1": 0.9974
+      },
+      "cell_f1": 0.9974,
+      "by_type": {
+        "borderless": {
+          "docling": 1.0,
+          "vision": 0.9231,
+          "default": 1.0
+        },
+        "control": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "dense numeric": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "line breaks in cells": {
+          "docling": 1.0,
+          "vision": 0.5,
+          "default": 1.0
+        },
+        "merged headers": {
+          "docling": 0.9796,
+          "vision": 0.9796,
+          "default": 0.9796
+        },
+        "skewed scan": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "split across pages": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        }
+      },
+      "rule": {
+        "default": "vision",
+        "vision_types": []
+      },
+      "per_table": {
+        "borderless": {
+          "docling": 1.0,
+          "vision": 0.9231,
+          "default": 1.0
+        },
+        "control-a": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "control-b": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "dense-numeric": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "line-breaks": {
+          "docling": 1.0,
+          "vision": 0.5,
+          "default": 1.0
+        },
+        "merged-headers": {
+          "docling": 0.9796,
+          "vision": 0.9796,
+          "default": 0.9796
+        },
+        "scan-skewed": {
+          "docling": 1.0,
+          "vision": 1.0,
+          "default": 1.0
+        },
+        "split-pages": {
+          "docling": 0.0,
+          "vision": 1.0,
+          "default": 1.0
+        }
+      }
+    },
+    "summaries": {
+      "action_item_recall": 1.0,
+      "action_item_precision": 1.0,
+      "decision_recall": 1.0
+    },
+    "speakers": {
+      "word_attribution": 0.8299,
+      "named_share": 0.5714
+    },
+    "asr": {
+      "wer": 0.0288,
+      "recordings": 3
+    },
+    "speed": {
+      "first_token_p50_s": 2.546,
+      "first_token_p90_s": 5.066,
+      "answer_p50_s": 4.017,
+      "answer_p90_s": 7.497
+    }
+  },
+  "criteria": [
+    {
+      "metric": "retrieval.hybrid+rerank.recall@8",
+      "value": 1.0,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": false,
+      "goal": null
+    },
+    {
+      "metric": "answers.fact_coverage",
+      "value": 1.0,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": false,
+      "goal": null
+    },
+    {
+      "metric": "guardian.groundedness",
+      "value": null,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": null,
+      "informational": false,
+      "goal": null
+    },
+    {
+      "metric": "answers.unanswerable_declined",
+      "value": 1.0,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": false,
+      "goal": null
+    },
+    {
+      "metric": "extraction.field_accuracy",
+      "value": 0.9839,
+      "op": ">=",
+      "threshold": 0.98,
+      "pass": true,
+      "informational": false,
+      "goal": null
+    },
+    {
+      "metric": "tables.cell_f1",
+      "value": 0.9974,
+      "op": ">=",
+      "threshold": 0.95,
+      "pass": true,
+      "informational": false,
+      "goal": null
+    },
+    {
+      "metric": "summaries.action_item_recall",
+      "value": 1.0,
+      "op": ">=",
+      "threshold": 0.9,
+      "pass": true,
+      "informational": false,
+      "goal": null
+    },
+    {
+      "metric": "asr.wer",
+      "value": 0.0288,
+      "op": "<=",
+      "threshold": 0.05,
+      "pass": true,
+      "informational": false,
+      "goal": null
+    }
+  ],
+  "passed": true,
+  "failed_files": [],
+  "timings": {
+    "phase_a_s": 51.5,
+    "phase_b_s": 205.2,
+    "total_s": 256.8
+  },
+  "questions": [
+    {
+      "id": "doc-01",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.032,
+        "first_token_s": 3.515,
+        "total_s": 5.354
+      },
+      "turn_id": 32,
+      "guardian": {}
+    },
+    {
+      "id": "doc-02",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.025,
+        "first_token_s": 2.262,
+        "total_s": 4.017
+      },
+      "turn_id": 33,
+      "guardian": {}
+    },
+    {
+      "id": "doc-03",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.026,
+        "first_token_s": 2.32,
+        "total_s": 3.9
+      },
+      "turn_id": 34,
+      "guardian": {}
+    },
+    {
+      "id": "doc-04",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.822,
+        "first_token_s": 2.714,
+        "total_s": 3.835
+      },
+      "turn_id": 35,
+      "guardian": {}
+    },
+    {
+      "id": "doc-05",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.02,
+        "first_token_s": 3.166,
+        "total_s": 4.748
+      },
+      "turn_id": 36,
+      "guardian": {}
+    },
+    {
+      "id": "doc-06",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.251,
+        "first_token_s": 2.246,
+        "total_s": 2.937
+      },
+      "turn_id": 37,
+      "guardian": {}
+    },
+    {
+      "id": "doc-07",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.019,
+        "first_token_s": 6.007,
+        "total_s": 7.616
+      },
+      "turn_id": 38,
+      "guardian": {}
+    },
+    {
+      "id": "doc-08",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 0.14285714285714285
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 0.16666666666666666
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.017,
+        "first_token_s": 2.264,
+        "total_s": 3.575
+      },
+      "turn_id": 39,
+      "guardian": {}
+    },
+    {
+      "id": "doc-09",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.826,
+        "first_token_s": 2.09,
+        "total_s": 3.242
+      },
+      "turn_id": 40,
+      "guardian": {}
+    },
+    {
+      "id": "doc-10",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.018,
+        "first_token_s": 2.283,
+        "total_s": 3.742
+      },
+      "turn_id": 41,
+      "guardian": {}
+    },
+    {
+      "id": "doc-11",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.224,
+        "first_token_s": 2.204,
+        "total_s": 2.877
+      },
+      "turn_id": 42,
+      "guardian": {}
+    },
+    {
+      "id": "doc-12",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.013,
+        "first_token_s": 2.313,
+        "total_s": 3.908
+      },
+      "turn_id": 43,
+      "guardian": {}
+    },
+    {
+      "id": "doc-13",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.026,
+        "first_token_s": 5.938,
+        "total_s": 7.705
+      },
+      "turn_id": 44,
+      "guardian": {}
+    },
+    {
+      "id": "doc-14",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.767,
+        "first_token_s": 3.125,
+        "total_s": 4.427
+      },
+      "turn_id": 45,
+      "guardian": {}
+    },
+    {
+      "id": "doc-15",
+      "category": "document",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.03,
+        "first_token_s": 7.01,
+        "total_s": 8.735
+      },
+      "turn_id": 46,
+      "guardian": {}
+    },
+    {
+      "id": "mtg-01",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.255,
+        "first_token_s": 2.546,
+        "total_s": 3.242
+      },
+      "turn_id": 47,
+      "guardian": {}
+    },
+    {
+      "id": "mtg-02",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.24,
+        "first_token_s": 1.753,
+        "total_s": 2.896
+      },
+      "turn_id": 48,
+      "guardian": {}
+    },
+    {
+      "id": "mtg-03",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 0.3333333333333333
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.017,
+        "first_token_s": 3.005,
+        "total_s": 4.465
+      },
+      "turn_id": 49,
+      "guardian": {}
+    },
+    {
+      "id": "mtg-04",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.014,
+        "first_token_s": 4.311,
+        "total_s": 5.711
+      },
+      "turn_id": 50,
+      "guardian": {}
+    },
+    {
+      "id": "mtg-05",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 0.3333333333333333
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.027,
+        "first_token_s": 5.066,
+        "total_s": 6.675
+      },
+      "turn_id": 51,
+      "guardian": {}
+    },
+    {
+      "id": "mtg-06",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 0.5
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.349,
+        "first_token_s": 2.259,
+        "total_s": 3.468
+      },
+      "turn_id": 52,
+      "guardian": {}
+    },
+    {
+      "id": "mtg-07",
+      "category": "meeting",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 0.5
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 0.5
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 1,
+      "citation_precision": 0.0,
+      "latency": {
+        "retrieval_s": 1.019,
+        "first_token_s": 1.986,
+        "total_s": 3.621
+      },
+      "turn_id": 53,
+      "guardian": {}
+    },
+    {
+      "id": "x-01",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 0.267,
+        "first_token_s": 2.477,
+        "total_s": 3.728
+      },
+      "turn_id": 54,
+      "guardian": {}
+    },
+    {
+      "id": "x-02",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.035,
+        "first_token_s": 2.242,
+        "total_s": 5.837
+      },
+      "turn_id": 55,
+      "guardian": {}
+    },
+    {
+      "id": "x-03",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.021,
+        "first_token_s": 3.276,
+        "total_s": 4.78
+      },
+      "turn_id": 56,
+      "guardian": {}
+    },
+    {
+      "id": "x-04",
+      "category": "cross-source",
+      "retrieval": {
+        "bm25": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "vectors": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid": {
+          "recall": 1.0,
+          "rr": 1.0
+        },
+        "hybrid+rerank": {
+          "recall": 1.0,
+          "rr": 1.0
+        }
+      },
+      "facts": 1.0,
+      "facts_missing": 0,
+      "declined": false,
+      "cited": 2,
+      "citation_precision": 1.0,
+      "latency": {
+        "retrieval_s": 1.028,
+        "first_token_s": 4.526,
+        "total_s": 7.497
+      },
+      "turn_id": 57,
+      "guardian": {}
+    },
+    {
+      "id": "none-01",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 0.826,
+        "first_token_s": 3.918,
+        "total_s": 4.96
+      },
+      "turn_id": 58,
+      "guardian": {}
+    },
+    {
+      "id": "none-02",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 1.019,
+        "first_token_s": 4.597,
+        "total_s": 5.833
+      },
+      "turn_id": 59,
+      "guardian": {}
+    },
+    {
+      "id": "none-03",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 0.244,
+        "first_token_s": 1.411,
+        "total_s": 1.86
+      },
+      "turn_id": 60,
+      "guardian": {}
+    },
+    {
+      "id": "none-04",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 0.239,
+        "first_token_s": 1.534,
+        "total_s": 1.981
+      },
+      "turn_id": 61,
+      "guardian": {}
+    },
+    {
+      "id": "none-05",
+      "category": "unanswerable",
+      "retrieval": {
+        "bm25": {
+          "recall": null,
+          "rr": null
+        },
+        "vectors": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid": {
+          "recall": null,
+          "rr": null
+        },
+        "hybrid+rerank": {
+          "recall": null,
+          "rr": null
+        }
+      },
+      "facts": null,
+      "facts_missing": 0,
+      "declined": true,
+      "cited": 0,
+      "citation_precision": null,
+      "latency": {
+        "retrieval_s": 1.019,
+        "first_token_s": 4.693,
+        "total_s": 5.93
+      },
+      "turn_id": 62,
+      "guardian": {}
+    }
+  ]
+}

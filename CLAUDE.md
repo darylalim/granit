@@ -36,7 +36,7 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 ## Rules
 
 - **Dependencies:** `uv add` / `uv remove` only; never edit `uv.lock`. Pinned ML stack (PLAN.md §3.4): the transformers window is narrow, so upgrade deliberately.
-- **Licensing:** Apache-2.0/MIT models only, listed in `src/granit/config.py` and approved in `tests/unit/test_config.py`. Never the `-nc` TurboCTC variant. New dependencies must pass `test_dependency_licenses.py`; exceptions go in `licenses_overrides.toml` with a reason.
+- **Licensing:** Apache-2.0/MIT/OpenMDW-1.1 models only (not the revocable NVIDIA Open Model License, PLAN.md §3.5), listed in `src/granit/config.py` and approved in `tests/unit/test_config.py`. Never the `-nc` TurboCTC variant. New dependencies must pass `test_dependency_licenses.py`; exceptions go in `licenses_overrides.toml` with a reason.
 - **Pin models by commit SHA** in `config.py`. Load from the local snapshot (`granit.models.download.local_snapshot`), never by bare repo ID.
 - **Lazy imports:** `mlx*`, `torch`, `sentence_transformers`, `transformers`, `docling` are imported inside functions only (`test_lazy_imports.py`). Unit tests use fakes; no weights or GPU in CI (`HF_HUB_OFFLINE=1`).
 - **One phase at a time** (PLAN.md §2.1): ingest (A), Q&A (B) or verify (C). Never load models while `mlx_lm.server` or a worker runs (hook H4). Memory is freed by ending processes.

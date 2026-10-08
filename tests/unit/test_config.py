@@ -22,8 +22,11 @@ APPROVED = {
     "ibm-granite/granite-embedding-english-r2": "apache-2.0",
     "ibm-granite/granite-embedding-reranker-english-r2": "apache-2.0",
     "ibm-granite/granite-guardian-4.1-8b": "apache-2.0",
+    "nvidia/Nemotron-3-Diarization": "openmdw-1.1",
 }
-PERMISSIVE_MODEL_LICENSES = {"apache-2.0", "mit"}
+# OpenMDW-1.1 (Linux Foundation): use "without restriction", keep the notices when redistributing, patent
+# termination like Apache-2.0's, no terms on outputs (PLAN.md §7). Not the revocable NVIDIA Open Model License.
+PERMISSIVE_MODEL_LICENSES = {"apache-2.0", "mit", "openmdw-1.1"}
 
 MODELS = list(config.HUB_MODELS.values())
 
@@ -57,8 +60,9 @@ def test_local_models_come_from_pinned_sources() -> None:
         assert model.path.is_relative_to(config.MODELS_DIR)
 
 
-def test_guardian_source_is_not_a_runtime_download() -> None:
+def test_convert_sources_are_not_runtime_downloads() -> None:
     assert "guardian-source" not in config.RUNTIME_HUB_MODELS
+    assert "diarization-source" not in config.RUNTIME_HUB_MODELS
     assert set(config.RUNTIME_HUB_MODELS) == {
         "speech",
         "vad",

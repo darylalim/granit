@@ -41,6 +41,7 @@ Model weights are **not** part of this repository. They are downloaded from Hugg
 | Granite Embedding English R2 | Semantic search vectors | Apache-2.0 | [ibm-granite/granite-embedding-english-r2](https://huggingface.co/ibm-granite/granite-embedding-english-r2) |
 | Granite Embedding Reranker English R2 | Reranks search results | Apache-2.0 | [ibm-granite/granite-embedding-reranker-english-r2](https://huggingface.co/ibm-granite/granite-embedding-reranker-english-r2) |
 | Granite Guardian 4.1 8B | Judges answer groundedness / relevance (converted to 8-bit MLX locally) | Apache-2.0 | [ibm-granite/granite-guardian-4.1-8b](https://huggingface.co/ibm-granite/granite-guardian-4.1-8b) |
+| Nemotron 3 Diarization | Who spoke when (spike; downloaded only with `granit models download diarization-source`) | [OpenMDW-1.1](https://openmdw.ai/license/1-1/) | [nvidia/Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization) |
 
 ## License
 

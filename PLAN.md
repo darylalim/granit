@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v39 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v42 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned for a spike (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -194,6 +194,11 @@ M7 agreement check, so relevance verdicts are recorded but not shown until they'
 **Changes in v41:** **1.1.0**: M8 is built, so the version goes 1.0.0 → 1.1.0 (`uv version --bump minor`, §4.3 *Version
 plan*); the merge to `main` publishes the release. Next (1.x): the private goals (§4.9 *Pass criteria*), including action-item
 owners, which need speaker diarization (license check first; out of scope in §3.5 until then).
+
+**Changes in v42:** **diarization license check** (§3.5 *Speaker diarization*): of the weights mlx-audio 0.5.7 can run, only
+**Nemotron 3 Diarization** (OpenMDW-1.1) is permissive; Sortformer v2.1 (NVIDIA Open Model License) is rejected as revocable.
+§7 now allows OpenMDW-1.1 for models. The NeMo source is pinned as `diarization-source` (a `convert` source like Guardian's, not a
+runtime download); whether diarization joins Phase A depends on the spike.
 ---
 
 ## 1. Scope (v1)
@@ -668,8 +673,24 @@ can't extend it). Without it, the meeting fixture scored 6.2 % on formatting alo
   peaking at 15.6 GB from cached buffers.
 
 **Later (v2 voice input):** mlx-audio also has `realtime_vad` (streaming endpointing) and `smart_turn` (end-of-turn detection) for
-microphone input. Their weights' licenses get checked when v2 starts. Speaker diarization (`sortformer`, `nemotron_diarization`) stays out
-of scope (licenses unchecked).
+microphone input. Their weights' licenses get checked when v2 starts.
+
+**Speaker diarization (v42, license check; spike pending):** mlx-audio 0.5.7 has two diarization modules. Licenses checked on
+2026-10-08 (model cards + license texts):
+
+| Weights | License | Decision |
+|---|---|---|
+| `nvidia/Nemotron-3-Diarization` (2026-09-23, 100M, ≤ 8 speakers, streaming + offline) | OpenMDW-1.1 | ✅ approved, pinned as `diarization-source` |
+| `nvidia/diar_streaming_sortformer_4spk-v2.1` (mlx-audio `sortformer` default) and its `mlx-community` fp16 conversion | NVIDIA Open Model License | ❌ revocable (guardrail clause), Trustworthy AI terms, NVIDIA may change the terms |
+| `nvidia/diar_streaming_sortformer_4spk-v2` | CC-BY-4.0 | fallback only: a content license with no patent grant, 4 speakers |
+| `nvidia/diar_sortformer_4spk-v1` | CC-BY-NC-4.0 | ❌ non-commercial |
+
+**OpenMDW-1.1** (Linux Foundation): use "without restriction" (copyright, patent, database, trade secret); keep the license and notices
+when redistributing (granit never redistributes weights); rights end on a patent/copyright suit over the model (like Apache-2.0's patent
+clause); no terms on outputs. It also makes the user responsible for clearing third-party rights, and the card lists training data
+"licensed under agreement" (David AI), which is usual for open weights. NVIDIA's `model.safetensors` is in transformers layout, so the
+pin downloads only the `.nemo` archive (~0.2 GB) and mlx-audio's converter builds the MLX weights locally (PyTorch, already pinned).
+The spike measures speaker turns on the private meetings against the transcript segments, to name action-item owners (§4.9 item 2).
 
 ### 3.6 Documents: Docling + Granite Vision (built in M3)
 
@@ -1828,7 +1849,7 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Decision | Choice |
 |---|---|
 | Hardware | M2 Max, 32 GB (~400 GB/s) |
-| Licensing (models) | Commercial use → Apache-2.0 models only (no `turboctc-nc`; multilingual embedding deferred pending Gemma tokenizer terms review) |
+| Licensing (models) | Commercial use → Apache-2.0, MIT or **OpenMDW-1.1** models only (v42, §3.5; no `turboctc-nc`, no NVIDIA Open Model License; multilingual embedding deferred pending Gemma tokenizer terms review) |
 | GitHub repo | **Public** `darylalim/granit` (§4.6): description + 20 topics, squash-only merges, secret scanning + push protection, Dependabot alerts (no auto-upgrade PRs), ruleset on `main` (PR + `lint`/`test` required, no force-push/deletion, no bypass) stored in `.github/rulesets/main.json` |
 | `.gitignore` | Project-specific (§4.5): ignore `data/`, `models/`, weight/db extensions, venv/caches/dist, secrets, OS/editor files; commit `uv.lock`, hooks, CI, license files, fixtures; guarded by `test_gitignore.py` |
 | License (granit) | **Open source, Apache-2.0**: `LICENSE` + `NOTICE`, `license = "Apache-2.0"` metadata, CI dependency-license guard (permissive + MPL-2.0 only), `THIRD_PARTY_NOTICES.md` on releases, miniaudio instead of ffmpeg |

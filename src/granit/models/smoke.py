@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from granit.config import HUB_MODELS, LOCAL_MODELS
-from granit.fixtures import say_wav, text_page_png
+from granit.fixtures import DIALOGUE, dialogue_wav, say_wav, text_page_png
 from granit.models.download import local_snapshot
 from granit.models.memory import footprint, mlx_peak_gb, mps_allocated_gb
 from granit.verify.guardian import groundedness_messages, parse_score
@@ -257,6 +257,29 @@ def check_guardian() -> Details:
     return {"raw": text.strip(), "mlx_peak_gb": round(mlx_peak_gb(), 2)}
 
 
+def check_diarization() -> Details:
+    from granit.ingest.audio import decode
+    from granit.ingest.speakers import Diarizer
+
+    diarizer = Diarizer()
+    expect(
+        diarizer.available(),
+        "the diarization model is not built; run: uv run granit models convert diarization",
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        wav, lines = dialogue_wav(DIALOGUE, Path(tmp))
+        probs, frame_s = diarizer.probabilities(decode(wav))
+    # Each line's dominant channel: Daniel's two lines share one, Samantha's two another.
+    channels = [
+        int(probs[int(s / frame_s) : int(e / frame_s)].sum(axis=0).argmax()) for s, e, _ in lines
+    ]
+    expect(
+        channels[0] == channels[2] != channels[1] == channels[3],
+        f"expected two alternating speakers, got channels {channels}",
+    )
+    return {"channels": channels, "mlx_peak_gb": round(mlx_peak_gb(), 2)}
+
+
 CHECKS: dict[str, Callable[[], Details]] = {
     "speech": check_speech,
     "vad": check_vad,
@@ -267,6 +290,7 @@ CHECKS: dict[str, Callable[[], Details]] = {
     "reranker": check_reranker,
     "mps-threads": check_mps_threads,
     "guardian": check_guardian,
+    "diarization": check_diarization,
 }
 
 

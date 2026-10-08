@@ -16,7 +16,7 @@ import hashlib
 import json
 import shutil
 import sqlite3
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -168,6 +168,16 @@ MIGRATIONS: list[str] = [
     CREATE UNIQUE INDEX verdicts_by_turn ON verdicts (turn_id, criterion_id) WHERE turn_id IS NOT NULL;
     CREATE UNIQUE INDEX verdicts_by_extraction ON verdicts (extraction_id, criterion_id)
         WHERE extraction_id IS NOT NULL;
+    """,
+    # 4: M9 speakers (PLAN.md §3.7): the user's names for a recording's diarized speakers. Two speakers with the same
+    # name are one person. Re-transcribing renumbers speakers, so complete_ingest clears them.
+    """
+    CREATE TABLE speaker_names (
+        source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        speaker INTEGER NOT NULL CHECK (speaker >= 1),
+        name TEXT NOT NULL CHECK (name != ''),
+        PRIMARY KEY (source_id, speaker)
+    );
     """,
 ]
 
@@ -571,6 +581,7 @@ class Store:
             raise ValueError(f"{len(chunks)} chunks but {len(vectors)} vectors")
         with transaction(self.conn):
             self.conn.execute("DELETE FROM chunks WHERE source_id = ?", (job.source_id,))
+            self.conn.execute("DELETE FROM speaker_names WHERE source_id = ?", (job.source_id,))
             self.conn.execute(
                 "DELETE FROM extractions WHERE source_id = ? AND kind != 'form'", (job.source_id,)
             )
@@ -785,6 +796,28 @@ class Store:
                 (source.id, extraction.kind),
             )
             self._insert_extractions(None, source.id, [extraction])
+
+    # speaker names (PLAN.md §3.7)
+
+    def speaker_names(self, source_id: int) -> dict[int, str]:
+        rows = self.conn.execute(
+            "SELECT speaker, name FROM speaker_names WHERE source_id = ? ORDER BY speaker",
+            (source_id,),
+        )
+        return {int(r["speaker"]): r["name"] for r in rows}
+
+    def set_speaker_names(self, source: Source, names: Mapping[int, str]) -> dict[int, str]:
+        """Replace the recording's speaker names; blank names unname a speaker. Returns what was stored."""
+        cleaned = {int(k): " ".join(v.split()) for k, v in names.items() if v and v.strip()}
+        if any(k < 1 for k in cleaned):
+            raise ValueError(f"speakers are numbered from 1, got {sorted(cleaned)}")
+        with transaction(self.conn):
+            self.conn.execute("DELETE FROM speaker_names WHERE source_id = ?", (source.id,))
+            self.conn.executemany(
+                "INSERT INTO speaker_names (source_id, speaker, name) VALUES (?, ?, ?)",
+                [(source.id, k, v) for k, v in sorted(cleaned.items())],
+            )
+        return cleaned
 
     # the library's expected names and terms (applied when recordings are transcribed)
 

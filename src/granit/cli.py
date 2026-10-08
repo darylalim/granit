@@ -45,11 +45,12 @@ def _models_convert(args: argparse.Namespace) -> int:
 
     for key in args.keys or list(LOCAL_MODELS):
         model = LOCAL_MODELS[key]
-        print(f"→ building {model.path.name} ({model.q_bits}-bit) from {model.source}", flush=True)
+        precision = f"{model.q_bits}-bit" if model.q_bits else "unquantized"
+        print(f"→ building {model.path.name} ({precision}) from {model.source}", flush=True)
         print(f"  {build(model)}")
         if args.delete_source:
             freed = delete_cached(HUB_MODELS[model.source])
-            print(f"  deleted bf16 source from the HF cache ({freed / 1e9:.1f} GB freed)")
+            print(f"  deleted the source from the HF cache ({freed / 1e9:.1f} GB freed)")
     return 0
 
 
@@ -81,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     download.add_argument("keys", nargs="*", choices=[[], *HUB_MODELS], metavar="KEY")
     download.set_defaults(func=_models_download)
 
-    convert = actions.add_parser("convert", help="build local quantized models (Guardian q8)")
+    convert = actions.add_parser("convert", help="build local models (Guardian q8, diarization)")
     convert.add_argument("keys", nargs="*", choices=[[], *LOCAL_MODELS], metavar="KEY")
     convert.add_argument(
         "--delete-source",

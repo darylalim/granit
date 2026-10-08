@@ -119,7 +119,7 @@ def test_migration_keeps_jobs_and_their_extractions(tmp_path: Path) -> None:
         " VALUES (1, 1, 'form', 'json', '{}', 1, 'm', ?)",
         (now(),),
     )
-    assert migrate(conn) == len(MIGRATIONS) == 3
+    assert migrate(conn) == len(MIGRATIONS) >= 3  # v2 → latest (v3 rebuilt jobs)
     assert conn.execute("SELECT job_id FROM extractions").fetchone()[0] == 1
     assert conn.execute("SELECT task, status FROM jobs").fetchone() == ("extract", "done")
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1  # back on

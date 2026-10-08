@@ -8,17 +8,58 @@ from __future__ import annotations
 
 import random
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 
-def say_wav(text: str, directory: Path, name: str = "speech") -> Path:
+def say_wav(text: str, directory: Path, name: str = "speech", voice: str | None = None) -> Path:
     """Synthesize ``text`` with macOS ``say`` and convert it to 16 kHz mono WAV with ``afconvert``."""
     aiff, wav = directory / f"{name}.aiff", directory / f"{name}.wav"
-    subprocess.run(["say", "-o", str(aiff), text], check=True)
+    subprocess.run(["say", *(["-v", voice] if voice else []), "-o", str(aiff), text], check=True)
     subprocess.run(
         ["afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1", str(aiff), str(wav)], check=True
     )
     return wav
+
+
+# Two voices the diarization spike told apart in every meeting (PLAN.md §3.5); Karen merged with Samantha.
+DIALOGUE = (
+    (
+        "Daniel",
+        "Thanks for coming. The budget review is due on Friday, so we need the numbers this week.",
+    ),
+    ("Samantha", "I can pull the sales figures together by Wednesday afternoon."),
+    ("Daniel", "Good. Then I will check the travel costs and send the summary to finance."),
+    ("Samantha", "Sounds good. I will also ask the regional teams for their forecasts."),
+)
+
+
+def dialogue_wav(
+    lines: Sequence[tuple[str, str]], directory: Path, name: str = "dialogue", pause_s: float = 0.7
+) -> tuple[Path, list[tuple[float, float, str]]]:
+    """``say`` each (voice, text) line, trimmed and ``pause_s`` apart, into one 16 kHz WAV; returns each line's (start, end, voice)."""
+    import wave
+
+    import numpy as np
+
+    rate = 16_000
+    pause = np.zeros(int(pause_s * rate), dtype=np.int16)
+    parts, turns, t = [pause], [], pause_s
+    for i, (voice, text) in enumerate(lines):
+        with wave.open(str(say_wav(text, directory, f"{name}-{i}", voice)), "rb") as f:
+            audio = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16)
+        loud = np.flatnonzero(np.abs(audio) > 32)
+        audio = audio[loud[0] : loud[-1] + 1] if loud.size else audio
+        turns.append((round(t, 2), round(t + len(audio) / rate, 2), voice))
+        parts += [audio, pause]
+        t += len(audio) / rate + pause_s
+    path = directory / f"{name}.wav"
+    with wave.open(str(path), "wb") as f:
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(rate)
+        f.writeframes(np.concatenate(parts).tobytes())
+    return path, turns
 
 
 def text_page_png(lines: tuple[str, ...], path: Path) -> Path:

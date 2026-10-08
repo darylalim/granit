@@ -80,9 +80,11 @@ class LocalModel:
     key: str
     source: str
     path: Path
-    q_bits: int
+    q_bits: int | None  # None: converted without quantization
     phase: str
     size_gb: float
+    # How it's built (models/convert.py): "mlx-lm" (convert + quantize) or "nemotron-diarization" (mlx-audio's NeMo converter)
+    builder: str = "mlx-lm"
 
     def is_built(self) -> bool:
         return (self.path / "config.json").is_file() and (self.path / SOURCE_RECORD).is_file()
@@ -177,7 +179,7 @@ HUB_MODELS: dict[str, HubModel] = {
             revision="f667ed73aee57d40cc39428eb768b4fd87a0a29e",
             license="openmdw-1.1",
             phase="convert",
-            runtime="NeMo source for the local mlx-audio build (diarization spike, PLAN.md §3.5)",
+            runtime="NeMo source for the local fp32 mlx-audio build (speakers, PLAN.md §3.7)",
             size_gb=0.20,
             # mlx-audio converts from the .nemo archive; the rest are other runtimes' copies and demo media.
             ignore_patterns=("model.safetensors", "*.gguf", "*.mp4", "*.gif"),
@@ -196,10 +198,19 @@ LOCAL_MODELS: dict[str, LocalModel] = {
             phase="C",
             size_gb=8.9,
         ),
+        LocalModel(
+            key="diarization",
+            source="diarization-source",
+            path=MODELS_DIR / "nemotron-3-diarization-mlx",
+            q_bits=None,  # fp32, as measured in the spike (PLAN.md §3.7)
+            phase="A",
+            size_gb=0.40,
+            builder="nemotron-diarization",
+        ),
     )
 }
 
-# Downloaded for runtime use. The Guardian source is only needed while building its q8 copy.
+# Downloaded for runtime use. Convert sources (Guardian, diarization) are only needed while building their local copies.
 RUNTIME_HUB_MODELS: tuple[str, ...] = tuple(
     k for k, m in HUB_MODELS.items() if m.phase != "convert"
 )

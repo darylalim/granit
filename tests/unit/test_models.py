@@ -120,6 +120,49 @@ def test_build_quantizes_and_records_source(
     assert len(calls) == 1
 
 
+def test_build_diarization_converts_the_nemo_archive_unquantized(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    fake_source(monkeypatch, tmp_path)
+    calls = []
+
+    def fake_convert(nemo_path: str, mlx_path: str, **kwargs: Any) -> None:
+        calls.append((nemo_path, mlx_path, kwargs))
+        Path(mlx_path).mkdir()
+        (Path(mlx_path) / "config.json").write_text("{}")
+
+    fake_module(
+        monkeypatch, "mlx_audio.vad.models.nemotron_diarization.convert", convert=fake_convert
+    )
+    monkeypatch.setattr(convert, "version", lambda _pkg: "0.5.7")
+    model = config.LocalModel(
+        "diarization",
+        "diarization-source",
+        tmp_path / "out",
+        None,
+        "A",
+        0.001,
+        builder="nemotron-diarization",
+    )
+    convert.build(model)
+    source = config.HUB_MODELS["diarization-source"]
+    assert calls == [
+        (
+            str(tmp_path / "src" / convert.NEMO_ARCHIVE),
+            str(model.path),
+            {"dtype": "float32", "source_id": source.repo_id, "revision": source.revision},
+        )
+    ]
+    record = json.loads((model.path / config.SOURCE_RECORD).read_text())
+    assert record["q_bits"] is None
+    assert record["tool"] == "mlx-audio 0.5.7"
+    assert model.is_built()
+
+
+def test_local_models_name_a_known_builder() -> None:
+    assert {m.builder for m in config.LOCAL_MODELS.values()} <= set(convert.TOOLS)
+
+
 def test_build_refuses_a_half_finished_output(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

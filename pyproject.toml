@@ -1,6 +1,6 @@
 [project]
 name = "granit"
-version = "1.0.0"
+version = "1.1.0"
 description = "Private, fully local document & meeting intelligence on Apple Silicon with IBM Granite models on MLX."
 readme = "README.md"
 license = "Apache-2.0"

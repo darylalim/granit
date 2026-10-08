@@ -5,8 +5,9 @@
 Private, fully local document & meeting intelligence on Apple Silicon. IBM Granite models (speech, Docling,
 vision, 8B LLM, embeddings, reranker, Guardian) on MLX, with hybrid search, cited answers and a Streamlit UI.
 
-> **Status:** 1.0. All v1 milestones (M0–M7) are built: transcription, document conversion, form extraction,
-> hybrid search, cited answers, meeting summaries, the Streamlit app and the evaluation harness; M8 (the Guardian verify job, for 1.1) is built. Both evaluation sets
+> **Status:** 1.1. All v1 milestones (M0–M7) are built: transcription, document conversion, form extraction,
+> hybrid search, cited answers, meeting summaries, the Streamlit app and the evaluation harness. 1.1 adds M8, the Guardian
+> verify job (`granit verify`, groundedness badges in Ask and Library). Both evaluation sets
 > pass the 1.0 quality criteria ([PLAN.md](PLAN.md) §4.9, with the private set's goals for 1.x). See PLAN.md for the full design.
 
 ## What it does (v1)

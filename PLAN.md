@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v40: M8 verify job built (§2.4 *As built*; release 1.1.0 is a separate version-bump PR). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -190,6 +190,10 @@ first, then verify, then Q&A restarts once), **Check answers** on Ask, summary c
 copy of the private library: 164 verdicts in 634 s (~7.8 s per answer), peak 11.0 GB. **Badges show groundedness only:**
 answer relevance failed 18 of 81 real answers, several of them short correct ones ("24% [3]"), and only groundedness passed the
 M7 agreement check, so relevance verdicts are recorded but not shown until they're validated.
+
+**Changes in v41:** **1.1.0**: M8 is built, so the version goes 1.0.0 → 1.1.0 (`uv version --bump minor`, §4.3 *Version
+plan*); the merge to `main` publishes the release. Next (1.x): the private goals (§4.9 *Pass criteria*), including action-item
+owners, which need speaker diarization (license check first; out of scope in §3.5 until then).
 ---
 
 ## 1. Scope (v1)

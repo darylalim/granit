@@ -135,6 +135,46 @@ def labelled_turns(
     return [replace(t, speaker=None) if not label else t for t, label in out]
 
 
+@dataclass(frozen=True)
+class SpeakerInfo:
+    """What the Library and ``granit speakers`` show to help the user name a speaker."""
+
+    speaker: int
+    talk_s: float
+    turns: int
+    samples: tuple[Turn, ...]  # the longest turns, in time order
+
+
+def speaker_infos(segments: Sequence[Segment], samples: int = 2) -> list[SpeakerInfo]:
+    by_speaker: dict[int, list[Turn]] = {}
+    for turn in turns(segments):
+        if turn.speaker is not None:
+            by_speaker.setdefault(turn.speaker, []).append(turn)
+    out = []
+    for speaker, spoken in sorted(by_speaker.items()):
+        longest = sorted(spoken, key=lambda t: len(t.text.split()), reverse=True)[:samples]
+        out.append(
+            SpeakerInfo(
+                speaker,
+                round(sum(t.end - t.start for t in spoken), 1),
+                len(spoken),
+                tuple(sorted(longest, key=lambda t: t.start)),
+            )
+        )
+    return out
+
+
+def parse_names(assignments: Sequence[str]) -> dict[int, str]:
+    """``["1=Priya", "3=Project Manager", "2="]`` → ``{1: "Priya", 3: "Project Manager", 2: ""}`` (blank unnames)."""
+    names: dict[int, str] = {}
+    for item in assignments:
+        number, sep, name = item.partition("=")
+        if not sep or not number.strip().isdigit() or int(number) < 1:
+            raise ValueError(f"expected SPEAKER=NAME with SPEAKER a number from 1, got {item!r}")
+        names[int(number)] = name.strip()
+    return names
+
+
 # ── model ──
 
 

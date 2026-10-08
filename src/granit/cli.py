@@ -174,6 +174,17 @@ def build_parser() -> argparse.ArgumentParser:
     meeting.add_argument("--data", type=Path, help=data_help)
     meeting.set_defaults(func=_meeting)
 
+    speakers = commands.add_parser(
+        "speakers",
+        help="list a recording's speakers, or name them: granit speakers 3 1=Priya 2='Project Manager'",
+    )
+    speakers.add_argument("source", help="source id (see `granit sources`) or file name")
+    speakers.add_argument(
+        "names", nargs="*", metavar="SPEAKER=NAME", help="name speakers (blank name: unname)"
+    )
+    speakers.add_argument("--data", type=Path, help=data_help)
+    speakers.set_defaults(func=_speakers)
+
     verify = commands.add_parser(
         "verify",
         help="check answers and meeting summaries with Granite Guardian (Phase C)",
@@ -512,6 +523,45 @@ def _ask(args: argparse.Namespace) -> int:
     for number, hit in zip(answer.citation_numbers(), answer.cited, strict=True):
         print(f"  [{number}] {hit.citation}")
     print(f"  ({answer.latency['total_s']:.1f} s, turn #{answer.turn_id})", file=sys.stderr)
+    return 0
+
+
+def _speakers(args: argparse.Namespace) -> int:
+    from granit.ingest.audio import Transcript, timestamp
+    from granit.ingest.speakers import parse_names, speaker_infos
+
+    store = _store(args)
+    matches = [s for s in store.sources() if str(s.id) == args.source or s.name == args.source]
+    if not matches or matches[0].kind != "audio" or matches[0].status != "ready":
+        print(f"no ingested recording {args.source!r} (see `granit sources`)", file=sys.stderr)
+        return 1
+    source = matches[0]
+    path = store.derived_dir(source) / "transcript.json"
+    infos = speaker_infos(Transcript.from_json(json.loads(path.read_text())).segments)
+    if not infos:
+        print(
+            f"{source.name} has no speakers: build the model (`granit models convert diarization`),"
+            " then re-transcribe it",
+            file=sys.stderr,
+        )
+        return 1
+    names = store.speaker_names(source.id)
+    if args.names:
+        try:
+            given = parse_names(args.names)
+        except ValueError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        unknown = sorted(set(given) - {i.speaker for i in infos})
+        if unknown:
+            print(f"{source.name} has no speaker {unknown[0]}", file=sys.stderr)
+            return 1
+        names = store.set_speaker_names(source, {**names, **given})
+    for info in infos:
+        name = names.get(info.speaker, "(unnamed)")
+        print(f"Speaker {info.speaker}: {name} · {info.talk_s:.0f} s in {info.turns} turns")
+        for turn in info.samples:
+            print(f"   [{timestamp(turn.start)}] {turn.text[:120]}")
     return 0
 
 

@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from granit.ingest.audio import parse_terms, timestamp
+from granit.ingest.audio import Transcript, parse_terms, timestamp
+from granit.ingest.speakers import speaker_infos, speaker_label, turns
 from granit.search.hybrid import Hit, hit_from_row
 from granit.store.db import AUDIO_EXTENSIONS, DOCUMENT_EXTENSIONS, Source, Store, kind_of
 from granit.ui.layout import safe_md
@@ -238,6 +240,8 @@ def details(source: Source) -> str:
         parts = [duration(info["duration_s"])]
         if info["duration_s"]:
             parts.append(f"{100 * info.get('speech_s', 0) / info['duration_s']:.0f}% speech")
+        if info.get("speakers"):
+            parts.append(f"{info['speakers']} speaker{'s' * (info['speakers'] != 1)}")
         return " · ".join(parts)
     parts = []
     for key, word in (("pages", "page"), ("tables", "table"), ("charts", "chart")):
@@ -298,11 +302,82 @@ def document_md(markdown: str) -> str:
     return safe_md(IMAGE_COMMENT.sub("*(image)*", markdown))
 
 
-def transcript_md(transcript: dict[str, Any]) -> str:
-    """One line per segment with its time, ready for ``st.markdown``."""
-    return "\n\n".join(
-        f"`{timestamp(s['start'])}` {safe_md(s['text'])}" for s in transcript["segments"]
-    )
+def transcript_md(transcript: dict[str, Any], names: Mapping[int, str] | None = None) -> str:
+    """One line per segment with its time, ready for ``st.markdown``; with speakers, one per turn with who spoke."""
+    segments = transcript["segments"]
+    if not any(w.get("speaker") for s in segments for w in s.get("words", ())):
+        return "\n\n".join(f"`{timestamp(s['start'])}` {safe_md(s['text'])}" for s in segments)
+    t = Transcript.from_json(transcript)
+    lines = []
+    for turn in turns(t.segments):
+        who = speaker_label(turn.speaker, names or {})
+        label = f"**{safe_md(who)}** " if who else ""
+        lines.append(f"`{timestamp(turn.start)}` {label}{safe_md(turn.text)}")
+    return "\n\n".join(lines)
+
+
+# ── speakers (PLAN.md §3.7) ──
+
+
+@dataclass
+class SpeakerRow:
+    """Plain text: the page escapes it as it renders."""
+
+    speaker: int
+    name: str  # the user's name, "" if unnamed
+    stats: str  # "3:12 in 14 turns"
+    samples: list[tuple[str, str]]  # (time, text) of the longest turns
+    clip: tuple[float, float]  # the longest turn, to play
+
+
+def speaker_rows(transcript: dict[str, Any], names: Mapping[int, str]) -> list[SpeakerRow]:
+    rows = []
+    for info in speaker_infos(Transcript.from_json(transcript).segments):
+        longest = max(info.samples, key=lambda t: t.end - t.start)
+        turns_word = f"{info.turns} turn{'s' * (info.turns != 1)}"
+        rows.append(
+            SpeakerRow(
+                speaker=info.speaker,
+                name=names.get(info.speaker, ""),
+                stats=f"{duration(info.talk_s)} in {turns_word}",
+                samples=[(timestamp(t.start), shorten(t.text, 160)) for t in info.samples],
+                clip=(longest.start, longest.end + 0.5),
+            )
+        )
+    return rows
+
+
+def shorten(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
+def names_changed(summary_content: str, names: Mapping[int, str]) -> bool:
+    """The library's speaker names differ from the ones this summary was written with."""
+    used = json.loads(summary_content).get("speakers", {})
+    return used != {str(k): v for k, v in sorted(names.items())}
+
+
+AUDIO_FORMATS = {
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aiff": "audio/aiff",
+    ".aif": "audio/aiff",
+    ".caf": "audio/x-caf",
+    ".mp4": "audio/mp4",
+}
+
+
+def audio_format(path: Path) -> str:
+    return AUDIO_FORMATS.get(path.suffix.lower(), "audio/wav")
+
+
+def needs_speakers(source: Source, diarization_built: bool) -> bool:
+    """A recording transcribed without speakers, now that the diarization model is built (re-transcribe adds them)."""
+    return source.kind == "audio" and diarization_built and "speakers" not in source.info
 
 
 def vocabulary_text(terms: list[str]) -> str:

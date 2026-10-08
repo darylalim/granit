@@ -2,8 +2,9 @@
 
 The table stretches to the window (more columns on big monitors); text (transcripts, document Markdown) stays at reading
 width. Recordings get a meeting summary (decisions + action items, Phase B) and Granite Guardian's checks of it against the
-library's summary criteria (Phase C, PLAN.md §2.4); documents show their Markdown, the tables and charts Granite Vision read,
-and their form extractions.
+library's summary criteria (Phase C, PLAN.md §2.4), and a Speakers panel to name who spoke (PLAN.md §3.7: only named
+speakers are labelled in summaries); documents show their Markdown, the tables and charts Granite Vision read, and their form
+extractions.
 """
 
 import io
@@ -12,21 +13,26 @@ from typing import Literal
 
 import streamlit as st
 
+from granit.config import LOCAL_MODELS
 from granit.models.phases import PhaseBusy
 from granit.store.db import Source
 from granit.ui.layout import READING_WIDTH, safe_md, table_height
 from granit.ui.session import backend, open_store
 from granit.ui.views import (
+    audio_format,
     details,
     document_md,
     form_result,
     latest,
     library_rows,
     model_label,
+    names_changed,
+    needs_speakers,
     other_vocabulary,
     read_json,
     save_summary_criteria,
     source_param,
+    speaker_rows,
     stamp,
     summary_checks,
     summary_criteria_text,
@@ -122,6 +128,10 @@ def show_summary(source: Source) -> None:
     st.caption(
         f"Summarized {safe_md(stamp(row['created_at']))} UTC by {safe_md(model_label(row['model']))}"
     )
+    if names_changed(row["content"], store.speaker_names(source.id)):
+        st.caption(
+            "Speaker names changed since this summary: **Summarize meeting** again to use them for owners."
+        )
     show_checks(row["id"])
 
 
@@ -166,6 +176,66 @@ def show_checks(extraction_id: int) -> None:
         )
         if st.button("Save checks", icon=":material/save:"):
             save_summary_criteria(store, text)
+            st.rerun()
+
+
+def show_speakers(source: Source, transcript: dict) -> None:
+    """Name who spoke (PLAN.md §3.7). Only named speakers are labelled in summaries, so a wrong name is the user's to see."""
+    names = store.speaker_names(source.id)
+    rows = speaker_rows(transcript, names)
+    if not rows:
+        return
+    named = sum(bool(r.name) for r in rows)
+    with st.expander(
+        f"Speakers · {named} of {len(rows)} named",
+        icon=":material/record_voice_over:",
+        expanded=named < len(rows),
+    ):
+        st.caption(
+            "Name the people you recognize: summaries use the names to give action items an owner."
+            " Leave a speaker blank if its samples mix two people (its lines are then summarized without a name),"
+            " and give two speakers the same name if they're one person."
+        )
+        with st.form(f"speakers_{source.id}", border=False):
+            path = store.file_path(source)
+            entered: dict[int, str] = {}
+            for row in rows:
+                with st.container(border=True):
+                    st.markdown(f"**Speaker {row.speaker:d}** · {safe_md(row.stats)}")
+                    st.caption(
+                        "\n\n".join(f"`{safe_md(t)}` {safe_md(text)}" for t, text in row.samples)
+                    )
+                    with st.container(horizontal=True, vertical_alignment="bottom"):
+                        st.audio(
+                            str(path),
+                            format=audio_format(path),
+                            start_time=row.clip[0],
+                            end_time=row.clip[1],
+                            alt=f"Speaker {row.speaker}'s longest turn",
+                        )
+                        entered[row.speaker] = st.text_input(
+                            f"Name for speaker {row.speaker}",
+                            value=row.name,
+                            placeholder="Name or role",
+                            key=f"speaker_name_{source.id}_{row.speaker}",
+                        )
+            if st.form_submit_button("Save names", icon=":material/save:"):
+                store.set_speaker_names(source, entered)
+                st.toast("Speaker names saved.", icon=":material/record_voice_over:")
+                st.rerun()
+
+
+@st.dialog("Re-transcribe this recording?")
+def confirm_retranscribe(source: Source) -> None:
+    st.markdown(
+        f"**{safe_md(source.name)}** will be transcribed again on the next batch. Its speakers are numbered afresh,"
+        " so the names given to them are cleared."
+    )
+    with st.container(horizontal=True):
+        if st.button("Re-transcribe", type="primary", icon=":material/spellcheck:"):
+            open_store().queue_ingest(source)
+            st.rerun()
+        if st.button("Cancel"):
             st.rerun()
 
 
@@ -218,12 +288,20 @@ with st.container(horizontal=True):
         if st.button(
             "Re-transcribe",
             icon=":material/spellcheck:",
-            disabled=not ready or not other_vocabulary(source, store.vocabulary()),
-            help="Transcribes the recording again with the library's current names and terms (set on the Ingest"
-            " page), on the next batch. Enabled when the list has changed since this recording was transcribed.",
+            disabled=not ready
+            or not (
+                other_vocabulary(source, store.vocabulary())
+                or needs_speakers(source, LOCAL_MODELS["diarization"].is_built())
+            ),
+            help="Transcribes the recording again on the next batch, with the library's current names and terms (set"
+            " on the Ingest page) and who spoke when. Enabled when the list has changed since this recording was"
+            " transcribed, or when it was transcribed before speakers were available.",
         ):
-            store.queue_ingest(source)
-            st.rerun()
+            if store.speaker_names(source.id):
+                confirm_retranscribe(source)
+            else:
+                store.queue_ingest(source)
+                st.rerun()
     else:
         summarize = False
         if st.button(
@@ -252,16 +330,19 @@ if summarize:
         )
 
 if source.kind == "audio":
+    transcript = read_json(store.derived_dir(source) / "transcript.json")
+    if transcript is not None and source.status == "ready":
+        with st.container(width=READING_WIDTH):
+            show_speakers(source, transcript)
     summary_tab, transcript_tab = st.tabs(["Summary", "Transcript"])
     with summary_tab, st.container(width=READING_WIDTH):
         show_summary(source)
     with transcript_tab:
-        transcript = read_json(store.derived_dir(source) / "transcript.json")
         if transcript is None:
             st.caption("The transcript appears here once the recording is ingested.")
         else:
             with st.container(width=READING_WIDTH, height=520):
-                st.markdown(transcript_md(transcript))
+                st.markdown(transcript_md(transcript, store.speaker_names(source.id)))
 else:
     content_tab, vision_tab, forms_tab = st.tabs(["Content", "Tables and charts", "Fields"])
     with content_tab:

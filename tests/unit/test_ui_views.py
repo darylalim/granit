@@ -191,3 +191,67 @@ def test_recordings_with_another_names_list_can_be_retranscribed(store: Store) -
     assert not views.other_vocabulary(audio, ["Priya"])
     assert views.other_vocabulary(audio, ["Priya", "Northbeam"])
     assert not views.other_vocabulary(doc, ["Priya", "Northbeam"])  # documents don't use it
+
+
+# ── speakers (M9, PLAN.md §3.7) ──
+
+
+def spoken_transcript() -> dict:
+    from granit.ingest.audio import Segment, Transcript, Word
+
+    words = [
+        Word("send", 0.0, 0.5, 1),
+        Word("$5", 0.5, 1.0, 1),
+        Word("will", 2.0, 2.5, 2),
+        Word("do", 2.5, 3.0, 2),
+        Word("thanks", 4.0, 4.5, 1),
+    ]
+    return Transcript(
+        5.0, 4.0, 1, (Segment(0.0, 4.5, "send $5 will do thanks", tuple(words)),)
+    ).to_json()
+
+
+def test_transcript_with_speakers_shows_names_and_escapes() -> None:
+    md = views.transcript_md(spoken_transcript(), {2: "Priya $"})
+    assert md.split("\n\n") == [
+        "`0:00` **Speaker 1** send \\$5",
+        "`0:02` **Priya \\$** will do",
+        "`0:04` **Speaker 1** thanks",
+    ]
+
+
+def test_speaker_rows() -> None:
+    one, two = views.speaker_rows(spoken_transcript(), {2: "Priya"})
+    assert (one.speaker, one.name, two.name) == (1, "", "Priya")
+    assert one.stats == "2 s in 2 turns"
+    assert one.samples == [("0:00", "send $5"), ("0:04", "thanks")]
+    assert one.clip == (0.0, 1.5)  # the longest turn, plus half a second
+
+
+def test_names_changed_since_the_summary() -> None:
+    assert not views.names_changed(json.dumps({"summary": "s"}), {})
+    assert views.names_changed(json.dumps({"summary": "s"}), {2: "Priya"})
+    content = json.dumps({"summary": "s", "speakers": {"2": "Priya"}})
+    assert not views.names_changed(content, {2: "Priya"})
+    assert views.names_changed(content, {2: "Priya", 1: "Sam"})
+
+
+def test_every_audio_type_has_a_player_format() -> None:
+    from granit.store.db import AUDIO_EXTENSIONS
+
+    assert set(views.AUDIO_FORMATS) >= AUDIO_EXTENSIONS
+    assert views.audio_format(Path("a.M4A")) == "audio/mp4"
+
+
+def test_recordings_without_speakers_can_get_them(store: Store) -> None:
+    audio, _ = store.add_file(FIXTURES / "audio" / "vad_pauses.wav")
+    doc, _ = store.add_file(FIXTURES / "documents" / "report.pdf")
+    assert views.needs_speakers(audio, diarization_built=True)
+    assert not views.needs_speakers(audio, diarization_built=False)
+    assert not views.needs_speakers(doc, diarization_built=True)
+    store.conn.execute(
+        "UPDATE sources SET info = ? WHERE id = ?", (json.dumps({"speakers": 2}), audio.id)
+    )
+    audio = store.source(audio.id)
+    assert not views.needs_speakers(audio, diarization_built=True)
+    assert views.details(audio) == ""  # no duration yet; speakers alone aren't shown

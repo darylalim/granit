@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -123,3 +124,57 @@ def test_vocabulary_keeps_the_speaker_of_a_merged_word() -> None:
 
     merged = apply_vocabulary([w("north", 0, 1, 2), w("beam", 1, 2, 2)], ["Northbeam"])
     assert [(x.text, x.speaker) for x in merged] == [("Northbeam", 2)]
+
+
+def test_speaker_infos_give_talk_time_and_the_longest_turns() -> None:
+    t = transcript(
+        seg(w("hi", 0, 1, 1), w("all", 1, 2, 1)),
+        seg(w("thanks", 3, 4, 2)),
+        seg(w("one", 5, 6, 1), w("two", 6, 7, 1), w("three", 7, 8, 1)),
+        seg(w("ok", 9, 10, None)),
+    )
+    (one, two) = sp.speaker_infos(t.segments, samples=1)
+    assert (one.speaker, one.talk_s, one.turns) == (1, 5.0, 2)
+    assert [x.text for x in one.samples] == ["one two three"]
+    assert (two.speaker, two.talk_s, [x.text for x in two.samples]) == (2, 1.0, ["thanks"])
+
+
+def test_parse_names() -> None:
+    assert sp.parse_names(["1=Priya", "3= Project Manager ", "2="]) == {
+        1: "Priya",
+        3: "Project Manager",
+        2: "",
+    }
+    for bad in ("Priya", "x=Priya", "0=Nobody"):
+        with pytest.raises(ValueError, match="SPEAKER=NAME"):
+            sp.parse_names([bad])
+
+
+def test_speakers_command_lists_and_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from granit import cli
+    from granit.store.db import Store
+    from tests.conftest import ROOT
+
+    store = Store(tmp_path / "data")
+    source, _ = store.add_file(ROOT / "tests" / "fixtures" / "audio" / "vad_pauses.wav")
+    job = store.claim_next()
+    assert job is not None
+    store.complete_ingest(job, [], np.zeros((0, 768), np.float16), "rev")
+    t = transcript(
+        seg(w("send", 0, 1, 1), w("it", 1, 2, 1)), seg(w("will", 3, 4, 2), w("do", 4, 5, 2))
+    )
+    out = store.derived_dir(source)
+    out.mkdir(parents=True)
+    (out / "transcript.json").write_text(json.dumps(t.to_json()))
+    data = ["--data", str(tmp_path / "data")]
+
+    assert cli.main(["speakers", str(source.id), *data]) == 0
+    assert "Speaker 2: (unnamed)" in capsys.readouterr().out
+    assert cli.main(["speakers", str(source.id), "2=Priya", *data]) == 0
+    assert "Speaker 2: Priya" in capsys.readouterr().out
+    assert cli.main(["speakers", str(source.id), "1=Sam", *data]) == 0  # adds, keeps Priya
+    assert store.speaker_names(source.id) == {1: "Sam", 2: "Priya"}
+    assert cli.main(["speakers", str(source.id), "5=Nobody", *data]) == 1
+    assert "no speaker 5" in capsys.readouterr().err

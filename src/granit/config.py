@@ -171,6 +171,17 @@ HUB_MODELS: dict[str, HubModel] = {
             runtime="bf16 source for the local q8 build",
             size_gb=16.77,
         ),
+        HubModel(
+            key="diarization-source",
+            repo_id="nvidia/Nemotron-3-Diarization",
+            revision="f667ed73aee57d40cc39428eb768b4fd87a0a29e",
+            license="openmdw-1.1",
+            phase="convert",
+            runtime="NeMo source for the local mlx-audio build (diarization spike, PLAN.md §3.5)",
+            size_gb=0.20,
+            # mlx-audio converts from the .nemo archive; the rest are other runtimes' copies and demo media.
+            ignore_patterns=("model.safetensors", "*.gguf", "*.mp4", "*.gif"),
+        ),
     )
 }
 

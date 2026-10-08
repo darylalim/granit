@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v39 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v43 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -194,6 +194,15 @@ M7 agreement check, so relevance verdicts are recorded but not shown until they'
 **Changes in v41:** **1.1.0**: M8 is built, so the version goes 1.0.0 → 1.1.0 (`uv version --bump minor`, §4.3 *Version
 plan*); the merge to `main` publishes the release. Next (1.x): the private goals (§4.9 *Pass criteria*), including action-item
 owners, which need speaker diarization (license check first; out of scope in §3.5 until then).
+
+**Changes in v42:** **diarization license check** (§3.5 *Speaker diarization*): of the weights mlx-audio 0.5.7 can run, only
+**Nemotron 3 Diarization** (OpenMDW-1.1) is permissive; Sortformer v2.1 (NVIDIA Open Model License) is rejected as revocable.
+§7 now allows OpenMDW-1.1 for models. The NeMo source is pinned as `diarization-source` (a `convert` source like Guardian's, not a
+runtime download); whether diarization joins Phase A depends on the spike.
+
+**Changes in v43:** **M9 planned** (§3.7, §5): diarization joins Phase A; the Library lists each recording's speakers to name;
+summaries label only **named** speakers' turns (the spike's step 2: unnamed labels and wrong ones both hurt); the eval names speakers
+the way a careful user would (a speaker is named only when ≥ 80 % of its words are one person). Release 1.2.0 (§4.3).
 ---
 
 ## 1. Scope (v1)
@@ -668,8 +677,70 @@ can't extend it). Without it, the meeting fixture scored 6.2 % on formatting alo
   peaking at 15.6 GB from cached buffers.
 
 **Later (v2 voice input):** mlx-audio also has `realtime_vad` (streaming endpointing) and `smart_turn` (end-of-turn detection) for
-microphone input. Their weights' licenses get checked when v2 starts. Speaker diarization (`sortformer`, `nemotron_diarization`) stays out
-of scope (licenses unchecked).
+microphone input. Their weights' licenses get checked when v2 starts.
+
+**Speaker diarization (v42, license check; spike pending):** mlx-audio 0.5.7 has two diarization modules. Licenses checked on
+2026-10-08 (model cards + license texts):
+
+| Weights | License | Decision |
+|---|---|---|
+| `nvidia/Nemotron-3-Diarization` (2026-09-23, 100M, ≤ 8 speakers, streaming + offline) | OpenMDW-1.1 | ✅ approved, pinned as `diarization-source` |
+| `nvidia/diar_streaming_sortformer_4spk-v2.1` (mlx-audio `sortformer` default) and its `mlx-community` fp16 conversion | NVIDIA Open Model License | ❌ revocable (guardrail clause), Trustworthy AI terms, NVIDIA may change the terms |
+| `nvidia/diar_streaming_sortformer_4spk-v2` | CC-BY-4.0 | fallback only: a content license with no patent grant, 4 speakers |
+| `nvidia/diar_sortformer_4spk-v1` | CC-BY-NC-4.0 | ❌ non-commercial |
+
+**OpenMDW-1.1** (Linux Foundation): use "without restriction" (copyright, patent, database, trade secret); keep the license and notices
+when redistributing (granit never redistributes weights); rights end on a patent/copyright suit over the model (like Apache-2.0's patent
+clause); no terms on outputs. It also makes the user responsible for clearing third-party rights, and the card lists training data
+"licensed under agreement" (David AI), which is usual for open weights. NVIDIA's `model.safetensors` is in transformers layout, so the
+pin downloads only the `.nemo` archive (~0.2 GB) and mlx-audio's converter builds the MLX weights locally (PyTorch, already pinned).
+The spike measures speaker turns on the private meetings against the transcript segments, to name action-item owners (§4.9 item 2).
+
+**Spike, step 1 (2026-10-08): who spoke when.** fp32 MLX build (397 MB, converted in seconds), `offline` preset, threshold 0.5,
+scored after the best speaker mapping (10 ms frames, no collar; *attribution* = share of lines or words whose dominant predicted
+speaker is the right one):
+
+| Meeting | Speakers (true / found) | DER | Miss / FA / confusion | Attribution | Speed, peak memory |
+|---|---|---|---|---|---|
+| AMI ES2008b (37 min, room mix) | 4 / 4 | 0.181 | 0.160 / 0.016 / **0.005** | **0.942** of 5,956 words | 3.4 s (655× real time), 1.27 GB |
+| AMI IB4003 (34 min) | 4 / 4 | 0.178 | 0.150 / 0.025 / **0.003** | **0.893** of 6,614 words | 2.9 s, 1.26 GB |
+| public vendor-review (37 s, `say` voices) | 3 / 2 | 0.292 | 0 / 0.015 / 0.276 | 0.750 of 8 lines | < 1 s, 0.89 GB |
+| public peak-season (31 s) | 3 / 2 | 0.138 | 0 / 0.013 / 0.124 | 0.833 of 6 lines | |
+| public atlas-checkin (25 s) | 4 / 3 | 0.294 | 0 / 0.016 / 0.278 | 0.833 of 6 lines | |
+
+- **AMI was in its training data** (ES2008 is AMI train, IB4003 dev), so these two rows show the pipeline works on real audio, not
+  generalization. The card's held-out **AMI test** result (offline, forced-alignment references): **DER 9.25 %**, speaker count right
+  in 87.5 % of meetings. Most of the misses here are words the manual annotations time as speech where the model hears none
+  (overlaps, backchannels); confusion, which is what names an owner, stays under 1 %.
+- **The synthetic meetings are the hard case:** boundaries are exact (within ~0.1 s) and the model is confident, but it merges
+  similar `say` voices (Samantha + Karen in two meetings, Rishi + Samantha in one) with only seconds of speech per speaker and one
+  TTS engine behind all of them. Real meetings don't look like this; the public set isn't a good diarization check.
+- **Cost is negligible:** ~1.3 GB and seconds per hour of audio, so it fits Phase A next to Speech + Docling + Vision (15.6 GB).
+
+**Spike, step 2 (2026-10-08): speakers → action-item owners.** Each transcript word gets the speaker active around it (±0.1 s,
+else the nearest within 1 s); consecutive words of one speaker form a turn line. Summaries by the current prompt on scratch copies
+of the eval libraries, one variant per fresh `mlx_lm.server` (CLAUDE.md), scored with the eval's own `action_items`:
+
+| Transcript given to the summary | Public (3 meetings) | AMI ES2008b | AMI IB4003 |
+|---|---|---|---|
+| Plain lines (today) | 1.000 | 0.600 | 0.333 |
+| `Speaker N:` turns + rules to resolve labels to names | 1.000 (precision 0.89) | 0.400 | 0.333 |
+| **Turns with user-given names** (simulated: each speaker → the true one it overlaps most) | 0.833 | **0.800** (precision 1.0) | n/a |
+
+- **Unnamed labels don't help.** The 8B model writes `Speaker 1` as an owner despite the rule not to, and a label can't match
+  an owner. It often has the right person: in IB4003, "Speaker 1: find out whether rooms can be split" is the project manager's
+  task. But AMI's owners are roles nobody says aloud, so the transcript alone can't name them.
+- **Named speakers help real meetings:** in ES2008b all four role owners come out right (0.6 → 0.8; the miss has the right owner
+  but different wording). IB4003 has no roles in AMI's metadata, so naming can't be simulated there.
+- **A wrong speaker beats the text:** where diarization merged voices (`peak-season`: Marcus heard as Elena), the summary gave Elena
+  Marcus's task, though "Marcus, can you start the hiring? Sure, I'll post…" names him and plain text got it right (1.0 → 0.5).
+- Caveats: one real meeting with names, which was also in the model's training data; naming is simulated with the true mapping.
+
+**Recommendation (adopted in v43 as M9, §3.7):** build diarization as an ingest step with **user-named speakers**: Phase A stores a speaker per
+word in `transcript.json`; the Library lists each recording's speakers with a sample line or clip to name (and merge) them;
+summaries get name-labelled turns only once speakers are named, and plain lines otherwise. The eval needs speaker names per meeting
+(ES2008b's roles from AMI metadata; the public set's `say` voices), and the public set can't check diarization itself. Whether to
+build this as M9 is a scope decision for 1.x (decided: yes, v43).
 
 ### 3.6 Documents: Docling + Granite Vision (built in M3)
 
@@ -752,6 +823,77 @@ all 6 fields exact with ISO dates, absent field reported missing. Docling ≈ 1.
 null handling, required fields, date normalization + format checks, `x-sums` and amount parsing, page merging, crop geometry, page rendering, chart data in Markdown);
 golden (`tests/models/test_documents.py`): the card's three examples plus the generated scanned report, digital memo and invoice.
 Fixtures: `scripts/make_document_fixtures.py` (Pillow + macOS Helvetica; the memo is printed by headless Chrome).
+
+### 3.7 Speakers: diarization + user-named speakers (M9, planned for 1.2)
+
+**Goal:** action items said in the first person get an owner (§4.9 *Private set*, item 2), without the model ever guessing who a
+voice is. Evidence: the §3.5 spike. Unnamed `Speaker N` labels made summaries worse (the 8B model writes labels as owners); names
+lifted a real meeting's action items 0.6 → 0.8; a wrong label overrode a name said in the text.
+
+**Rules (from the spike):**
+1. **Only named speakers reach the LLM.** A turn by a named speaker is `[12:04] Priya: …`; a turn by an unnamed one is a plain
+   `[12:04] …` line, exactly as today. With no names, summaries are byte-for-byte today's prompt (the eval baseline holds).
+2. **Naming is the user's.** The model never maps labels to names: names come from the Library, so a wrong owner is a naming
+   mistake the user can see and fix, not a hidden guess.
+3. **A mixed speaker stays unnamed.** Diarization can merge two similar voices into one speaker (§3.5: `say` voices); naming can't
+   split it, so the Library's samples show the mix and the user leaves it unnamed (its turns go to the LLM unlabelled).
+
+**Model:** `LocalModel("diarization", source="diarization-source")`, built by `granit models convert` with mlx-audio's NeMo
+converter (`mlx_audio.vad.models.nemotron_diarization.convert`, no quantization: **fp32, 0.4 GB**, measured in the spike; bf16
+would save 0.2 GB and need a new check). `models/convert.py` gets one builder per local model (Guardian keeps `mlx_lm.convert`). It
+loads in the Phase A worker next to Speech + VAD; `offline` preset (30.4 s buffer; best DER on the card), threshold 0.5. Not built
+→ ingest works as today, without speakers, and the Library says how to build it.
+
+**Ingest (Phase A, `ingest/speakers.py`):** after transcription, on the already-decoded audio: diarize → each word gets the speaker
+active within ±0.1 s of it (else the nearest within 1 s, else the previous word's) → `Word.speaker: int | None` in
+`transcript.json` (optional field: old transcripts load unchanged). Speakers are numbered 1… by first appearance. `sources.info`
+gets `speakers` (count) and the diarization model revision. **Cost:** ~3 s and 1.3 GB peak for 37 min of audio (spike), so Phase A
+peaks at about **16.9 GB** (15.6 measured in M1 + 1.3; re-measured with `granit bench`), still 10 GB under the GPU limit.
+Recordings ingested before M9 get speakers through Library's **Re-transcribe** (no separate backfill job).
+
+**Storage:** schema v4 adds `speaker_names (source_id → sources ON DELETE CASCADE, speaker INTEGER, name TEXT NOT NULL,
+PRIMARY KEY (source_id, speaker))`. Two speakers given the same name are one person (that's how a split voice is merged).
+Re-transcribing renumbers speakers, so it deletes the recording's names (the Library warns first). Names don't bump
+`corpus_version`: search chunks don't change in M9.
+
+**Summaries (`reason/prompts.py`):** `transcript_lines(segments, names)` builds turn lines from the words when any speaker is named
+(consecutive words of one speaker form a turn, split before 60 s), and today's segment lines otherwise. `SUMMARY_SYSTEM` gains the
+spike's *named* rule (*"Each line may start with the speaker's name… when a speaker commits ('I'll send it', 'will do'), the
+owner is that speaker"*) only when names are present, so unnamed summaries keep today's prompt. Sections still split at line
+boundaries; a summary stores the names it used (`extractions.content` → `"speakers": {...}`), so the Library can say *"names
+changed since this summary"* and offer **Summarize again**.
+
+**UI (Library, recording view; logic in `ui/views.py`, tested):**
+- A **Speakers** panel above the tabs: one row per speaker with talk time, its two longest turns as samples, a ▶ button
+  (`st.audio(file, start_time=…)` on the longest turn), and a name field. **Save names** writes `speaker_names`. Shown only when
+  the transcript has speakers; collapsed once every speaker is named.
+- The Transcript tab shows turns with names (or `Speaker 2` for unnamed ones), through `safe_md`.
+- Ask and search are unchanged in M9 (names in chunks would change chunking and need a `--fresh` eval: a later step).
+
+**CLI:** `granit transcribe FILE --json DIR` includes `speaker` per word when the model is built; `granit speakers SOURCE` lists
+speakers with samples, `granit speakers SOURCE 1=Priya 3="Project Manager"` names them (scripts and the eval use the same store call).
+
+**Evaluation (§4.9):**
+- **References:** each summary case may list speaker turns as `speakers: [{name, start, end}]`. Public: written by
+  `make_eval_fixtures.py` from each `say` line's times (regenerating changes every file's sha: `--fresh`). Private: ES2008b's
+  roles from AMI's `meetings.xml` + per-speaker words (`fetch_real_eval.py`); IB4003 has no roles, so none.
+- **Simulated naming:** after ingest the runner names each diarized speaker after the reference speaker with most of its words,
+  **only if that's ≥ 80 % of them** (a careful user's rule 3); otherwise unnamed. Logged per meeting.
+- **New metrics (informational, no pass threshold yet):** word speaker attribution and the share of speakers named. Action-item
+  recall keeps its private goal (0.90); the gate is **no regression** on either set (`eval compare`, CLAUDE.md), and ES2008b should
+  move from 0.6 toward the spike's 0.8.
+- The public set can't measure diarization quality (§3.5); AMI was in the model's training data. A held-out real meeting with
+  speaker references (not AMI) is the next addition to the private set.
+
+**Tests:** unit (no models): word → speaker labelling (pad, nearest, carry), turn building and the 60 s split, transcript JSON
+with and without `speaker`, `transcript_lines` with no / some / all names (no names = today's lines exactly), the prompt rule only
+with names, schema v4 migration + cascade, same-name merge, re-transcribe clears names, simulated naming (80 % rule),
+`speakers` CLI parsing, views (samples, talk time, `safe_md`). Golden (`tests/models/test_speakers.py`): on a generated two-voice
+fixture with Daniel + Samantha (told apart in every spike meeting), turn boundaries within 0.2 s of the reference, two speakers found; mlx-audio
+internals pinned by this test (the module is new in 0.5.7).
+
+**Non-goals for M9:** recognizing a voice across recordings (needs speaker embeddings; no model approved), more than 8 speakers
+(the model's limit: extra voices merge), live diarization, speaker names in search or Ask.
 
 ## 4. Development toolchain
 
@@ -974,6 +1116,7 @@ CI:   lint ─► test ─► release
 | `0.1.0` … `0.7.x` | Optional minor bumps at milestone ends (M1–M7) |
 | `1.0.0` | v1 complete (M0–M7) |
 | `1.1.0` | M8 verify job (v1.1) |
+| `1.2.0` | M9 speakers (§3.7) |
 
 **How to cut a release** (also in `CONTRIBUTING.md`): `uv version --bump <part>` → commit both files → PR → merge. CI does the rest.
 
@@ -1771,8 +1914,9 @@ granit/
 | M6 | Streamlit UI | Ingest (upload + queue + "Process now" + **"Accurate tables (slower)"** per upload, §3.6), Library, Ask (chat + citations + phase banner), Extract (schema editor); **theme + semantic color map (§4.7)**, **adaptive layout + `safe_md()` (§4.8)**, screenshot check of every page at 760 / 1512 / 2560 px in light and dark | 2–2½ days |
 | M7 | Evaluation (§4.9) | `granit eval` harness + metrics; public synthetic set (fixture script); private set (your ~30 questions, references); `granit eval label`; Guardian agreement check (50 verdicts, ≥ 85 %); first full run → calibrate thresholds; retrieval comparison (4 setups); **tables: Docling vs Vision on hard tables → decide `DOCUMENT_VISION_TABLES` by the §4.9 rule**; **1.0 gate: both sets pass** | 2½–3 days, then before every release |
 | M8 (v1.1) ✅ v40 | Verify job | Phase C in the phase manager, `verify` job type, `verdicts` table, criterion registry, custom summary criteria, verdict badges in Ask / Library | 1½ days |
+| M9 (v1.2) | Speakers (§3.7) | Diarization model build (`granit models convert`) + Phase A step; `Word.speaker`; schema v4 `speaker_names`; turn lines + named-speaker rule in summaries; Library **Speakers** panel (samples, ▶, names) + named transcript; `granit speakers`; eval speaker references + simulated naming (80 % rule); golden test; Phase A re-measured | 2–2½ days |
 
-About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends with ruff + ty + unit tests passing.
+About 13½–15½ days for v1, plus 1½ days for M8 (v1.1) and 2–2½ for M9 (v1.2). Every milestone ends with ruff + ty + unit tests passing.
 
 ## 6. Risks
 
@@ -1822,13 +1966,17 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Hooks slow down every step, or block legitimate work | Standard-library scripts for pre-tool hooks; command-word matching; unit tests; personal overrides in `settings.local.json` |
 | Stop gate loops on a test Claude can't fix | Honors `stop_hook_active`; Claude Code also stops forcing continuation after repeated blocks |
 | PyTorch/MPS query embedder misbehaves in Streamlit threads | Lock around calls; fallback to a small sidecar process (checked in M0) |
+| A wrong speaker name becomes a confident wrong owner (spike: a label beat the name said in the text) | Only user-named speakers reach the LLM; samples + ▶ in the Library to check before naming; mixed speakers stay unnamed; eval names at ≥ 80 % purity |
+| Diarization merges similar voices or meetings with more than 8 people | User leaves the merged speaker unnamed (plain lines, today's behavior); limit stated in the Library |
+| Diarization quality judged on data it trained on (AMI) | Card's held-out AMI test DER 9.25 %; add a non-AMI real meeting with speaker references to the private set |
+| mlx-audio's new `nemotron_diarization` module changes in an upgrade | Pinned `mlx-audio==0.5.7`; golden test on a two-voice fixture |
 
 ## 7. Decisions (2026-10-03)
 
 | Decision | Choice |
 |---|---|
 | Hardware | M2 Max, 32 GB (~400 GB/s) |
-| Licensing (models) | Commercial use → Apache-2.0 models only (no `turboctc-nc`; multilingual embedding deferred pending Gemma tokenizer terms review) |
+| Licensing (models) | Commercial use → Apache-2.0, MIT or **OpenMDW-1.1** models only (v42, §3.5; no `turboctc-nc`, no NVIDIA Open Model License; multilingual embedding deferred pending Gemma tokenizer terms review) |
 | GitHub repo | **Public** `darylalim/granit` (§4.6): description + 20 topics, squash-only merges, secret scanning + push protection, Dependabot alerts (no auto-upgrade PRs), ruleset on `main` (PR + `lint`/`test` required, no force-push/deletion, no bypass) stored in `.github/rulesets/main.json` |
 | `.gitignore` | Project-specific (§4.5): ignore `data/`, `models/`, weight/db extensions, venv/caches/dist, secrets, OS/editor files; commit `uv.lock`, hooks, CI, license files, fixtures; guarded by `test_gitignore.py` |
 | License (granit) | **Open source, Apache-2.0**: `LICENSE` + `NOTICE`, `license = "Apache-2.0"` metadata, CI dependency-license guard (permissive + MPL-2.0 only), `THIRD_PARTY_NOTICES.md` on releases, miniaudio instead of ffmpeg |
@@ -1850,4 +1998,5 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1). Every milestone ends
 | Claude Code hooks | H1 format/lint after edits · H2 protected paths · H3 command guards (uv only, no `turboctc-nc`, no GPU-limit tuning) · H4 one phase at a time · H5 quality gate on Stop · H6 session context; shared via `.claude/settings.json` |
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
-| Next step | The private set's remaining causes (§4.9 *Private set*): merged table headers (Vision for such tables), table captions in chunk context, then spoken numbers and action items; 1.0 when both sets pass |
+| Speakers (v43) | **Nemotron 3 Diarization** (OpenMDW-1.1, fp32 MLX, Phase A) + **user-named speakers**; only named speakers' turns are labelled for the LLM; no cross-recording voice identity (§3.7) |
+| Next step | **M9 speakers (§3.7)** → 1.2.0; then the private set's remaining goals (§4.9 *Private set*) |

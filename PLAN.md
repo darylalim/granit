@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v47 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v48 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v47: two fixes for mtg-01 tried and rejected (§4.9 *Private set*, item 4). v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v48: speech-model spike: no allowed model beats TurboCTC on the meetings; it stays (§3.5 *Stronger models*). v47: two fixes for mtg-01 tried and rejected (§4.9 *Private set*, item 4). v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -222,6 +222,11 @@ the Core PCE rows (rank 1 → 3; cross-01 rank 3 → 5, still answered). Recall@
 **Changes in v47:** two fixes for mtg-01 (the answer gives the first proposed meeting time, not the agreed one) were measured
 and **rejected**, so they aren't tried again (§4.9 *Private set*, item 4). Each ran in its own process on both sets (no judge),
 against fresh-process baselines on the same libraries.
+
+**Changes in v48:** **speech-model spike** (§3.5 *Stronger models, v48*): the two strongest allowed models on the Open ASR
+leaderboard's AMI column were measured on the eval meetings with granit's decode, VAD chunks and WER normalization. Neither
+beats TurboCTC, which stays. The private WER gap is deleted words in overlapping speech (11–16 % of the reference for both
+models; substitutions ~3 %), so a larger model doesn't close it.
 ---
 
 ## 1. Scope (v1)
@@ -694,6 +699,24 @@ can't extend it). Without it, the meeting fixture scored 6.2 % on formatting alo
   generation time only), so no third-party recordings and no licensing questions. `manifest.json` holds references and expected boundaries.
 - **Phase A note for the ingest worker (M4):** set an MLX cache limit there, as `mlx_server` does for Phase B: M1 measured Phase A
   peaking at 15.6 GB from cached buffers.
+
+**Stronger models (v48 spike).** Candidates: allowed licenses, supported by mlx-audio 0.5.7, best AMI scores on the Open ASR
+leaderboard (close-talk AMI: TurboCTC 7.71, `granite-speech-4.1-2b-nar` 6.96, `cohere-transcribe-03-2026` 7.02; rejected on
+license: Parakeet, Canary, Kyutai (CC-BY-4.0), Nemotron speech (NVIDIA Open Model License)). Measured with a scratch script on
+the five eval meetings (no vocabulary list for any model), one model per process:
+
+| Model (MLX build, revision) | atlas-checkin | peak-season | vendor-review | ES2008b | IB4003 | Peak memory | Time, 35 min |
+|---|---|---|---|---|---|---|---|
+| **TurboCTC 470M** (current) | 0.037 | 0.016 | 0.112 | **0.155** | **0.200** | **1.6 GB** | ~20 s |
+| `mlx-community/granite-speech-4.1-2b-nar-mlx` @ 6acb789 (Apache-2.0) | 0.111 | 0.016 | 0.056 | 0.198 | 0.235 | 6.8 GB | ~60 s |
+| `mlx-community/cohere-transcribe-03-2026-mlx-8bit` @ a0acb7f (Apache-2.0) | — | — | — | — | — | 7.6 GB | ~125 s |
+
+Cohere's third-party int8 build produced multilingual gibberish on every file under mlx-audio 0.5.7 (a loader mismatch, not
+the model; the original weights are gated, so it wasn't converted locally). Error breakdown on the AMI meetings: deletions
+0.110 / 0.158 (TurboCTC) vs 0.138 / 0.153 (4.1 2B), substitutions ~0.03 for both, insertions 0.013–0.016 vs 0.031–0.049. A larger
+model hears words no better here, invents more, and still drops overlapping speech: one transcript stream can't carry two
+speakers at once. **Decision: keep TurboCTC.** Reaching the private WER goal would need speaker separation before ASR, not a
+bigger recognizer; not planned. (AMI is in both Granite models' training data, so absolute AMI numbers are flattering.)
 
 **Later (v2 voice input):** mlx-audio also has `realtime_vad` (streaming endpointing) and `smart_turn` (end-of-turn detection) for
 microphone input. Their weights' licenses get checked when v2 starts.
@@ -1721,7 +1744,7 @@ The first full run calibrates these. Any later change to a threshold needs a one
   ≈ 1.5 % of words (item 4).
 - **n/a doesn't fail:** an area a set has no cases for is gated by the other set; at least one criterion must be measured.
 
-The goals stay the target for 1.x: a stronger speech model, private table cases, more meetings, a semantic task matcher.
+The goals stay the target for 1.x: a stronger speech model (v48: none of the allowed ones helps, §3.5), private table cases, more meetings, a semantic task matcher.
 
 #### Tables: Docling vs Vision (decided after M3)
 
@@ -1846,7 +1869,8 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
    v34~~, `audio.fix_oclock`) and merges adjacent or repeated numbers: a stuttered "twelve… twelve fifty" → `€1212.5`, "12 13"
    → `1213`, "3 3" → `33` (not fixed: `1213` can be a real number). Scoring gaps (`first` / `1st`, a lone `hundred` / `100`)
    are worth 0.001. Most of the WER is **dropped words** where the four speakers overlap or backchannel: the reference
-   interleaves every speaker, one CTC stream can't. Reaching ≤ 0.10 needs a stronger speech model, not formatting fixes.
+   interleaves every speaker, one CTC stream can't. Reaching ≤ 0.10 needs a stronger speech model, not formatting fixes. **v48:**
+   the two strongest allowed models were measured and neither helps (§3.5 *Stronger models*): it needs speaker separation.
    mtg-01 (v34): the transcript says "2 o'clock", the answer still gives the first proposal (11): answers should prefer what
    was finally agreed. **v47 (both rejected):** the proposal ("next Tuesday … 11 o'clock", chunk 26) and the change ("it would
    have to be in the afternoon … about 2 o'clock … perfect", chunk 27, which never says *Tuesday* or *meeting*) are adjacent

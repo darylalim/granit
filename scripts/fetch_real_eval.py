@@ -195,6 +195,10 @@ QUESTIONS = [
     q("mtg-05", "Why won't the remote control team work with teletext?", "meeting", ["internet"], span(ES, 1275, 1292)),
     q("mtg-06", "What is the remote control's selling price, and what is the limit on its production cost?", "meeting", ["25 | twenty five | twenty-five", "12.5 | 12.50 | twelve and a half"], span(ES, 1470, 1570)),
     q("mtg-07", "What did the team suggest to keep the remote's battery charged?", "meeting", ["charging station | cradle"], span(ES, 2050, 2075)),
+    # who said it (PLAN.md §3.8): the annotators' role-owned action items whose owner the words don't name. At 34:48 the Project
+    # Manager assigns the other three by role aloud ("industrial design, you have your components concept…"), so only their
+    # own task tests named speakers: "I will make sure to put up the minutes…" (the runner names ES2008b's roles, §3.7).
+    q("spk-01", "In the remote control design meeting, who said they would put up the minutes and the project documentation?", "speaker", ["Project Manager"], span(ES, 2088, 2141)),
     q("cross-01", "What federal funds target range did the FOMC keep in January 2024, and what was the median projected rate for the end of 2024 in the March projections?", "cross-source", ["5¼ | 5.25 | 5-1/4 | 5 1/4", "4.6"], page(FOMC, 11), page(SEP, 2)),
     q("none-01", "What is the median projection for real GDP growth in 2027 in the March 2024 projections?", "unanswerable", []),
     q("none-02", "What percentage of Puerto Rico's population was foreign-born in 2022?", "unanswerable", []),

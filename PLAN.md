@@ -1072,7 +1072,11 @@ speaker (possible later: the turns could be stored per chunk).
   (facts 0.870, action items 0.567 unchanged).
 - **Not done:** the RAG speaker rule (the speaker questions already pass without it; no A/B could show a gain); private role
   questions from the AMI action-item references (they need `fetch_real_eval.py` re-run, which rewrites the private references:
-  a separate step after M10).
+  a separate step after M10). **Prepared after 1.3.0:** only one of ES2008b's four role-owned items qualifies: at 34:48 the
+  Project Manager assigns the other three by role aloud ("industrial design, you have your components concept…"), so they test
+  reading, not names. `spk-01` asks who said they'd put up the minutes (*"I will make sure to put up the minutes…"*; expected
+  *Project Manager*). It lands with the next re-fetch; measure it with names off and on (one question: a yes / no check that
+  M10 works on real audio, not a score).
 
 ## 4. Development toolchain
 

@@ -19,7 +19,7 @@ from granit.ingest.speakers import ACTIVE, Diarizer, turns
 pytestmark = pytest.mark.model
 
 EDGE_S = 0.2  # turn starts and ends within this of the true line times
-PEAK_GB = 2.0  # spike: 1.3 GB for 37 min of audio
+PEAK_GB = 2.0  # spike: 1.3 GB for 37 min of audio (above what the process already holds: model tests share one)
 
 
 @pytest.fixture(scope="module")
@@ -41,9 +41,10 @@ def test_two_voices_alternate_with_edges_near_the_line_times(
     import mlx.core as mx
 
     path, lines = dialogue
+    held = mx.get_active_memory()
     mx.reset_peak_memory()
     probs, frame_s = diarizer.probabilities(decode(path))
-    assert mx.get_peak_memory() / 1e9 < PEAK_GB
+    assert (mx.get_peak_memory() - held) / 1e9 < PEAK_GB
     channels = []
     for start, end, _ in lines:
         window = probs[int(start / frame_s) : int(end / frame_s)]

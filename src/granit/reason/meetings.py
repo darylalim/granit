@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,10 +60,18 @@ class MeetingSummary:
 
 
 def summarize(
-    transcript: Any, llm: Any, counter: TokenCounter, budget: int = LLM_PROMPT_BUDGET_TOKENS
+    transcript: Any,
+    llm: Any,
+    counter: TokenCounter,
+    budget: int = LLM_PROMPT_BUDGET_TOKENS,
+    names: Mapping[int, str] | None = None,
 ) -> MeetingSummary:
+    """``names``: the user's speaker names (PLAN.md §3.7). Only named speakers are labelled; none = today's prompt."""
     start = time.perf_counter()
-    lines = transcript_lines(transcript.segments)
+    spoken = {w.speaker for s in transcript.segments for w in s.words}
+    names = {k: v for k, v in (names or {}).items() if k in spoken}
+    named = bool(names)
+    lines = transcript_lines(transcript.segments, names)
     if not lines:
         empty = {
             "summary": "No speech was found in this recording.",
@@ -70,16 +79,19 @@ def summarize(
             "action_items": [],
         }
         return MeetingSummary(empty, 0, 0.0)
-    sections = split_sections(lines, counter, budget)
+    sections = split_sections(lines, counter, budget, named)
     if len(sections) == 1:
-        data, _ = llm.chat_json(summary_messages(sections[0]), SUMMARY_SCHEMA)
+        data, _ = llm.chat_json(summary_messages(sections[0], named=named), SUMMARY_SCHEMA)
     else:
         partials = [
-            llm.chat_json(summary_messages(section, (i, len(sections))), SUMMARY_SCHEMA)[0]
+            llm.chat_json(summary_messages(section, (i, len(sections)), named), SUMMARY_SCHEMA)[0]
             for i, section in enumerate(sections, 1)
         ]
         data, _ = llm.chat_json(combine_messages(partials), SUMMARY_SCHEMA)
-    return MeetingSummary(clean_owners(data), len(sections), round(time.perf_counter() - start, 2))
+    data = clean_owners(data)
+    if named:  # which names this summary used: the Library notices when they change
+        data["speakers"] = {str(k): v for k, v in sorted(names.items())}
+    return MeetingSummary(data, len(sections), round(time.perf_counter() - start, 2))
 
 
 def summarize_source(store: Any, source: Any, llm: Any, counter: TokenCounter) -> MeetingSummary:
@@ -93,7 +105,7 @@ def summarize_source(store: Any, source: Any, llm: Any, counter: TokenCounter) -
         )
     path = store.derived_dir(source) / "transcript.json"
     transcript = Transcript.from_json(json.loads(path.read_text()))
-    summary = summarize(transcript, llm, counter)
+    summary = summarize(transcript, llm, counter, names=store.speaker_names(source.id))
     spec = HUB_MODELS["llm"]
     store.replace_extraction(
         source,

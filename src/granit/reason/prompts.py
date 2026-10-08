@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -133,6 +133,13 @@ Rules:
 - "due": the deadline in the transcript's own words; null if none.
 - Use only what the transcript says. Don't invent owners, dates or tasks."""
 
+# Added only when the user has named speakers (PLAN.md §3.7): unnamed transcripts keep the prompt above unchanged.
+NAMED_SPEAKERS_RULES = """
+- Some lines start with the speaker's name or role ("Priya: …"), from automatic speaker detection named by the user. It can be
+  wrong for a word or two where turns change.
+- Use the speakers to find owners: when a speaker commits to a task ("I'll send it", "will do", "yes, I'll set that up"), the
+  owner is that speaker, written as their line label."""
+
 COMBINE_SYSTEM = f"""You merge partial summaries of consecutive sections of one meeting into a single summary.
 Return ONLY a JSON object matching this schema, nothing else:
 
@@ -145,18 +152,35 @@ Rules:
 - Use only what the partial summaries say."""
 
 
-def transcript_lines(segments: Sequence[Any]) -> list[str]:
+def transcript_lines(segments: Sequence[Any], names: Mapping[int, str] | None = None) -> list[str]:
+    """``[12:04] text`` per segment; with speaker names, one line per turn and ``[12:04] Priya: text`` for named speakers."""
     from granit.ingest.audio import timestamp
 
-    return [f"[{timestamp(s.start)}] {s.text}" for s in segments]
+    if not names:
+        return [f"[{timestamp(s.start)}] {s.text}" for s in segments]
+    from granit.ingest.speakers import labelled_turns
+
+    return [
+        f"[{timestamp(t.start)}] {names[t.speaker]}: {t.text}"
+        if t.speaker is not None
+        else f"[{timestamp(t.start)}] {t.text}"
+        for t in labelled_turns(segments, names)
+    ]
+
+
+def summary_system(named: bool = False) -> str:
+    if not named:
+        return SUMMARY_SYSTEM
+    marker = "\n- Use only what the transcript says."
+    return SUMMARY_SYSTEM.replace(marker, NAMED_SPEAKERS_RULES + marker)
 
 
 def summary_messages(
-    lines: Sequence[str], part: tuple[int, int] | None = None
+    lines: Sequence[str], part: tuple[int, int] | None = None, named: bool = False
 ) -> list[dict[str, Any]]:
     label = f" (part {part[0]} of {part[1]})" if part else ""
     return [
-        {"role": "system", "content": SUMMARY_SYSTEM},
+        {"role": "system", "content": summary_system(named)},
         {"role": "user", "content": f"Transcript{label}:\n\n" + "\n".join(lines)},
     ]
 
@@ -169,10 +193,13 @@ def combine_messages(partials: Sequence[dict[str, Any]]) -> list[dict[str, Any]]
 
 
 def split_sections(
-    lines: Sequence[str], counter: TokenCounter, budget: int = LLM_PROMPT_BUDGET_TOKENS
+    lines: Sequence[str],
+    counter: TokenCounter,
+    budget: int = LLM_PROMPT_BUDGET_TOKENS,
+    named: bool = False,
 ) -> list[list[str]]:
     """Pack transcript lines into sections whose summary prompt fits ``budget`` (lines are never split)."""
-    base = messages_tokens(summary_messages([], (99, 99)), counter)
+    base = messages_tokens(summary_messages([], (99, 99), named), counter)
     sections: list[list[str]] = []
     current: list[str] = []
     size = base

@@ -116,6 +116,25 @@ def speaker_label(speaker: int | None, names: Mapping[int, str]) -> str:
     return names.get(speaker) or f"Speaker {speaker}"
 
 
+def labelled_turns(
+    segments: Sequence[Segment], names: Mapping[int, str], max_s: float = MAX_TURN_S
+) -> list[Turn]:
+    """Turns as the summary reads them: a named speaker's turns carry the name, everyone else's carry nothing.
+
+    Consecutive turns with the same label are one turn (two speakers given one name are one person; unnamed speakers
+    run together as plain text, as before diarization), still split before ``max_s``.
+    """
+    out: list[tuple[Turn, str]] = []
+    for turn in turns(segments, max_s):
+        label = names.get(turn.speaker, "") if turn.speaker is not None else ""
+        if out and out[-1][1] == label and turn.end - out[-1][0].start <= max_s:
+            last = out[-1][0]
+            out[-1] = (Turn(last.start, turn.end, last.speaker, f"{last.text} {turn.text}"), label)
+        else:
+            out.append((turn, label))
+    return [replace(t, speaker=None) if not label else t for t, label in out]
+
+
 # ── model ──
 
 

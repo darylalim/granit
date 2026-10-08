@@ -283,3 +283,87 @@ def test_summarize_source_stores_a_summary_extraction(store: Store) -> None:
     with pytest.raises(ValueError, match="isn't an ingested recording"):
         doc, _ = store.add_file(ROOT / "tests" / "fixtures" / "documents" / "invoice.png")
         summarize_source(store, doc, ScriptedLLM([]), COUNTER)
+
+
+# ── named speakers (M9, PLAN.md §3.7) ──
+
+
+def spoken(*turns: tuple[int | None, str]) -> Transcript:
+    """One segment per turn, each word 1 s long, every word of a turn by that turn's speaker."""
+    from granit.ingest.audio import Word
+
+    segs, t = [], 0.0
+    for speaker, text in turns:
+        words = []
+        for word in text.split():
+            words.append(Word(word, t, t + 1, speaker))
+            t += 1
+        segs.append(Segment(words[0].start, words[-1].end, text, tuple(words)))
+        t += 2
+    return Transcript(t, t, 1, tuple(segs), "speech@rev")
+
+
+MEETING = spoken(
+    (1, "Priya can you send the renewal"),
+    (2, "will do"),
+    (3, "Sam can you book the review"),
+    (4, "yes I will set that up"),
+)
+
+
+def test_without_names_lines_and_prompt_are_unchanged() -> None:
+    plain = [f"[0:{s.start:02.0f}] {s.text}" for s in MEETING.segments]
+    assert prompts.transcript_lines(MEETING.segments) == plain
+    assert prompts.transcript_lines(MEETING.segments, {}) == plain
+    assert prompts.summary_messages(plain)[0]["content"] == prompts.SUMMARY_SYSTEM
+    llm = ScriptedLLM([GOOD])
+    summary = summarize(MEETING, llm, COUNTER, names={9: "Nobody"})  # not a speaker here
+    ((messages, _),) = llm.calls
+    assert messages[0]["content"] == prompts.SUMMARY_SYSTEM
+    assert messages[1]["content"].endswith("\n".join(plain))
+    assert "speakers" not in summary.data
+
+
+def test_named_speakers_label_their_turns_and_unnamed_stay_plain() -> None:
+    lines = prompts.transcript_lines(MEETING.segments, {2: "Priya", 4: "Sam"})
+    assert lines == [
+        "[0:00] Priya can you send the renewal",
+        "[0:08] Priya: will do",
+        "[0:12] Sam can you book the review",
+        "[0:20] Sam: yes I will set that up",
+    ]
+
+
+def test_two_speakers_with_one_name_are_one_person() -> None:
+    t = spoken((1, "I will post"), (2, "the job ads"), (3, "great"))
+    assert prompts.transcript_lines(t.segments, {1: "Marcus", 2: "Marcus"}) == [
+        "[0:00] Marcus: I will post the job ads",
+        "[0:10] great",
+    ]
+
+
+def test_summary_with_names_adds_the_rule_and_records_the_names() -> None:
+    llm = ScriptedLLM([GOOD])
+    summary = summarize(MEETING, llm, COUNTER, names={2: "Priya", 4: "Sam", 7: "Gone"})
+    ((messages, _),) = llm.calls
+    assert messages[0]["content"] == prompts.summary_system(named=True) != prompts.SUMMARY_SYSTEM
+    assert prompts.NAMED_SPEAKERS_RULES in messages[0]["content"]
+    assert "Priya: will do" in messages[1]["content"]
+    assert summary.data["speakers"] == {"2": "Priya", "4": "Sam"}
+
+
+def test_summarize_source_uses_the_librarys_speaker_names(store: Store) -> None:
+    source, _ = store.add_file(ROOT / "tests" / "fixtures" / "audio" / "vad_pauses.wav")
+    job = store.claim_next()
+    assert job is not None
+    v = np.ones((1, 768), np.float16) / np.sqrt(768)
+    store.complete_ingest(job, [NewChunk("hello", "speech", start_s=0.0, end_s=1.0)], v, "rev")
+    out = store.derived_dir(source)
+    out.mkdir(parents=True)
+    (out / "transcript.json").write_text(json.dumps(MEETING.to_json()))
+    store.set_speaker_names(source, {2: "Priya"})
+    llm = ScriptedLLM([GOOD])
+    summarize_source(store, store.source(source.id), llm, COUNTER)
+    assert "Priya: will do" in llm.calls[0][0][1]["content"]
+    (summary,) = [e for e in store.extractions(source.id) if e["kind"] == "summary"]
+    assert json.loads(summary["content"])["speakers"] == {"2": "Priya"}

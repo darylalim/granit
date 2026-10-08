@@ -246,6 +246,45 @@ def add_lines(doc: Any, page: int, heading: str, lines: list[str]) -> int:
     return len(lines)
 
 
+MIN_ROW_VALUES = 2  # a row is matched to a text-layer line by at least this many value tokens
+
+
+def _line_label(line: str, values: list[str]) -> str | None:
+    """The words before ``values`` (canonical tokens) when ``line`` is a label followed by exactly those values."""
+    words = line.split()
+    for k in range(1, len(words)):
+        if _tokens(" ".join(words[k:])) == values:
+            return " ".join(words[:k])
+    return None
+
+
+def relabel_rows(doc: Any, lines_by_page: dict[int, list[str]]) -> int:
+    """Correct row labels from a digital PDF's text layer; returns the rows changed. Granite-Docling shifted one block's
+    labels down a row (v30 private set: the March federal funds rate under *Memo: Projected appropriate policy path*,
+    December's under *Federal funds rate*), so the values were right and the label wrong. A body row whose values appear on
+    exactly one text-layer line, after a label, takes that line's label; ambiguous or unmatched rows are left alone."""
+    changed = 0
+    for table in doc.tables:
+        pages = {p.page_no for p in table.prov}
+        lines = [line for page in sorted(pages) for line in lines_by_page.get(page, [])]
+        if not lines:
+            continue
+        for row in table.data.grid[1:]:
+            if not row or any(c.column_header for c in row):
+                continue
+            label, values = row[0], _tokens(" ".join(c.text for c in row[1:]))
+            if len(values) < MIN_ROW_VALUES:
+                continue
+            found = {found for line in lines if (found := _line_label(line, values))}
+            if len(found) != 1:
+                continue
+            new = found.pop()
+            if "".join(_tokens(new)) != "".join(_tokens(label.text)):
+                label.text = new
+                changed += 1
+    return changed
+
+
 def add_text_layer_lines(doc: Any, missing: dict[int, list[str]]) -> int:
     """Append the missing lines under one heading per page."""
     return sum(
@@ -423,6 +462,8 @@ class DocumentResult:
     pages_from_vision: int = 0
     # tables whose multi-level column header was merged into one row
     merged_headers: int = 0
+    # table rows whose label Docling shifted, corrected from the PDF's text layer
+    relabeled_rows: int = 0
     seconds: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> dict[str, Any]:
@@ -433,6 +474,7 @@ class DocumentResult:
             "text_layer_lines": self.text_layer_lines,
             "pages_from_vision": self.pages_from_vision,
             "merged_headers": self.merged_headers,
+            "relabeled_rows": self.relabeled_rows,
             "pictures": self.pictures,
             "charts": self.charts,
             "extractions": len(self.extractions),
@@ -529,8 +571,9 @@ class DocumentIngestor:
         finally:
             pages.close()
 
-        # after charts and tables, so a page whose few words sit in a table or chart keeps Docling's structure
         lines_by_page = text_layer_lines(path)
+        relabeled_rows = relabel_rows(doc, lines_by_page)
+        # after charts and tables, so a page whose few words sit in a table or chart keeps Docling's structure
         start = time.perf_counter()
         pages_from_vision = self._read_pages(doc, path, lines_by_page)
         seconds["pages"] = round(time.perf_counter() - start, 2)
@@ -558,6 +601,7 @@ class DocumentIngestor:
             text_layer_lines=text_layer,
             pages_from_vision=pages_from_vision,
             merged_headers=merged_headers,
+            relabeled_rows=relabeled_rows,
             seconds=seconds,
         )
 

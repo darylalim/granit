@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v45 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v46 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -213,6 +213,11 @@ roles named). Phase A peaks at **17.1 GB** (was 15.6).
 **Changes in v45:** **1.2.0**: M9 is built, so the version goes 1.1.0 → 1.2.0 (`uv version --bump minor`, §4.3 *Version
 plan*); the merge to `main` publishes the release. Next (1.x): the private set's remaining goals (§4.9 *Private set*); a held-out,
 non-AMI meeting with speaker references for the private set (§3.7 *Evaluation*).
+
+**Changes in v46:** table **row labels are checked against a digital PDF's text layer** (§3.6 item 9): doc-02 answered (3.9),
+private fact coverage **0.833 → 0.870** (goal 0.85 reached). `eval compare` flags hybrid+rerank MRR@8 0.849 → 0.819: the old top
+hit for doc-02 was the lone row mislabelled *Federal funds rate* (December's values), and the correct row now shares a chunk with
+the Core PCE rows (rank 1 → 3; cross-01 rank 3 → 5, still answered). Recall@8 stays 1.000. Public set: `relabel_rows` changes no row in its stored documents (not re-run).
 ---
 
 ## 1. Scope (v1)
@@ -803,9 +808,15 @@ build this as M9 is a scope decision for 1.x (decided: yes, v43).
    a table no longer turns the pair into plain text: the table is split by rows, and every piece repeats the caption and the header.
    Spaced numeric ranges keep their dash in the search text (`3.9 – 4.3`). Fixed: the year columns (cross-01) and the central
    tendency range (doc-03). Not fixed: Docling **shifted the row labels** of one block (March values under the *Memo* row), so
-   doc-02 still reads the wrong row: a partly wrong table that no header rule catches.
+   doc-02 still reads the wrong row: a partly wrong table that no header rule catches (fixed in v46, item 9).
 8. **Crops** sent to Vision are saved as `crops/p<page>_<kind><n>.png`; every Vision result is an `Extraction` (kind, format, content,
    valid, errors, page, crop, model + revision), ready for the `extractions` table (M4).
+9. **Row labels from the text layer (v46).** For a digital PDF, each body row whose values (≥ 2 canonical tokens) appear on
+   exactly **one** text-layer line of the table's page, after some words, takes those words as its label
+   (`documents.relabel_rows`, after the header merge). Granite-Docling had moved a block's labels down one row (the two-line
+   *Memo: Projected / appropriate policy path* took the March federal funds rate, *Federal funds rate* took December's). Ambiguous
+   or unmatched rows and labels equal up to spacing (`Core PCE inflation 4` / `inflation4`) are left alone; scans and images have
+   no text layer. Checked on all 26 eval PDFs: only those 2 rows change. Counted as `relabeled_rows` in the ingest summary.
 
 **Form extraction (`VisionModel.extract_fields`, `granit extract FILE --schema S.json`)**
 - The model card's **VAREX prompt** with the user's JSON Schema; the schema is checked before any model time is spent (must be an object).
@@ -1809,7 +1820,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 | Metric | First run | v29 | v30 | Pass at | Cause of the remaining gap |
 |---|---|---|---|---|---|
 | Retrieval recall@8 | 0.889 | **1.000** | **1.000** | ≥ 0.85 | ✅ (BM25 0.852 → vectors 0.833 → hybrid 0.870 → + rerank 0.889 in the first run) |
-| Fact coverage | 0.648 | 0.741 | 0.796 | ≥ 0.85 | ❌ v37: **0.833** (doc-11 fixed). Left: doc-02 row labels, the scan (Vision misreads), mtg-01 / mtg-04 answers, mtg-06 merged number |
+| Fact coverage | 0.648 | 0.741 | 0.796 | ≥ 0.85 | ✅ v46: **0.870** (v37 0.833, doc-11 fixed; v46 doc-02 fixed). Left: the scan (Vision misreads), mtg-01 / mtg-04 answers, mtg-06 merged number |
 | Unanswerable declined | 1.000 | 1.000 | 1.000 | ≥ 0.80 | ✅ |
 | Guardian groundedness | 1.000 | 1.000 | 0.962 | ≥ 0.90 | informational (no private hand labels); 12 / 12 controls caught |
 | Extraction field accuracy | 0.857 | 0.857 | 0.857 | ≥ 0.95 | ❌ item 6 below: Vision misreads digits on faint print (both receipts now flagged invalid by `x-sums`) |
@@ -1819,7 +1830,7 @@ releases, IRS W-9), a 1964 NARA routing sheet (scan, no text layer), 5 CORD rece
 **Triaged causes (read from the stored chunks and answers):**
 1. ~~**Docling on photos and scans:** loops or nothing~~ **Fixed in v29** (§3.6 item 6): both receipt questions now answered;
    the scan questions 0 / 2 → 0.5 / 2 (its date stamp is still missed).
-2. ~~**Merged table headers:**~~ **Fixed in v30** (§3.6 item 7), except doc-02 (shifted row labels). The Fed projections table has
+2. ~~**Merged table headers:**~~ **Fixed in v30** (§3.6 item 7); doc-02 (shifted row labels) **fixed in v46** (§3.6 item 9). The Fed projections table has
    a two-row header; Docling kept both rows, but Markdown has one header row, so split chunks repeated `Median 1 | Median 1 | …`
    (years lost) and 3 questions read the wrong column (the range 3.7–4.3 instead of the central tendency 3.9–4.3; 4.9 instead of 4.6) or
    declined. The §4.9 *Tables* rule asks for Vision on such tables when the private set shows it winning.
@@ -2045,4 +2056,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1) and 2–2½ for M9 (v
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
 | Speakers (v43) | **Nemotron 3 Diarization** (OpenMDW-1.1, fp32 MLX, Phase A) + **user-named speakers**; only named speakers' turns are labelled for the LLM; no cross-recording voice identity (§3.7) |
-| Next step | **M9 speakers (§3.7)** → 1.2.0; then the private set's remaining goals (§4.9 *Private set*) |
+| Next step | The private set's remaining goals (§4.9 *Private set*): v46 reached fact coverage; extraction, action items and WER remain |

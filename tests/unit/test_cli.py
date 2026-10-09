@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -49,3 +51,39 @@ def test_download_defaults_to_runtime_models(
     assert cli.main(["models", "download"]) == 0
     assert fetched == list(config.RUNTIME_HUB_MODELS)
     assert "guardian-source" not in fetched
+
+
+def _pgrep_finds(monkeypatch: pytest.MonkeyPatch, line: str) -> None:
+    def fake_run(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        assert cmd[:2] == ["pgrep", "-fl"]
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"{line}\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+
+def test_ask_refusal_names_the_ingest_process(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from granit.models import download, server
+
+    monkeypatch.setattr(download, "local_snapshot", lambda _model: tmp_path)
+    monkeypatch.setattr(server.LLMServer, "healthy", lambda _self: False)
+    _pgrep_finds(monkeypatch, "4321 python -m granit.ingest.worker --data lib")
+
+    with (
+        pytest.raises(
+            SystemExit, match=r"ingest is running .*\(process 4321 python -m granit\.ingest"
+        ),
+        cli._llm_server(),
+    ):
+        pass
+
+
+def test_verify_refusal_names_the_other_phase(monkeypatch: pytest.MonkeyPatch) -> None:
+    _pgrep_finds(monkeypatch, "999 python -m mlx_lm.server " + "x" * 200)
+
+    with pytest.raises(SystemExit, match=r"another phase is running") as refusal:
+        cli._verify(argparse.Namespace())
+    message = str(refusal.value)
+    assert "(process 999 python -m mlx_lm.server" in message
+    assert message.endswith("x)") and "x" * 121 not in message  # the line is cut to 120 characters

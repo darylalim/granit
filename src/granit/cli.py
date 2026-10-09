@@ -426,6 +426,7 @@ def _verify(args: argparse.Namespace) -> int:
     if busy.returncode == 0:
         raise SystemExit(
             "another phase is running (Q&A or ingest); stop it first: Guardian and the Q&A model don't fit together"
+            f" (process {busy.stdout.splitlines()[0][:120]})"
         )
     store = _store(args)
     store.enqueue_verify()
@@ -485,10 +486,13 @@ def _llm_server() -> Iterator[None]:
         yield
         return
     busy = subprocess.run(
-        ["pgrep", "-f", r"granit\.ingest\.worker|granit ingest"], capture_output=True
+        ["pgrep", "-fl", r"granit\.ingest\.worker|granit ingest"], capture_output=True, text=True
     )
     if busy.returncode == 0:
-        raise SystemExit("ingest is running (Phase A); ask again when it has finished")
+        raise SystemExit(
+            "ingest is running (Phase A); ask again when it has finished"
+            f" (process {busy.stdout.splitlines()[0][:120]})"
+        )
     print("starting the Q&A model…", file=sys.stderr)
     with server:
         server.wait_ready()

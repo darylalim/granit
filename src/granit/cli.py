@@ -410,22 +410,15 @@ def _ingest(args: argparse.Namespace) -> int:
 
 
 def _verify(args: argparse.Namespace) -> int:
-    import subprocess
-
+    from granit.models.procs import running
     from granit.verify.worker import VerifyWorker
 
-    busy = subprocess.run(
-        [
-            "pgrep",
-            "-fl",
-            r"mlx_lm[. ]server|granit\.models\.mlx_server|granit\.ingest\.worker|granit (ingest|ui)",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if busy.returncode == 0:
+    if busy := running(
+        r"mlx_lm[. ]server|granit\.models\.mlx_server|granit\.ingest\.worker|granit (ingest|ui)"
+    ):
         raise SystemExit(
             "another phase is running (Q&A or ingest); stop it first: Guardian and the Q&A model don't fit together"
+            f" (process {busy[:120]})"
         )
     store = _store(args)
     store.enqueue_verify()
@@ -474,21 +467,19 @@ def _sources(args: argparse.Namespace) -> int:
 @contextmanager
 def _llm_server() -> Iterator[None]:
     """Use the running Q&A server, or start one for this command (never while an ingest worker holds Phase A)."""
-    import subprocess
-
     from granit.config import HUB_MODELS
     from granit.models.download import local_snapshot
+    from granit.models.procs import running
     from granit.models.server import LLMServer, ServerConfig, stream_chat
 
     server = LLMServer(ServerConfig(local_snapshot(HUB_MODELS["llm"])))
     if server.healthy():
         yield
         return
-    busy = subprocess.run(
-        ["pgrep", "-f", r"granit\.ingest\.worker|granit ingest"], capture_output=True
-    )
-    if busy.returncode == 0:
-        raise SystemExit("ingest is running (Phase A); ask again when it has finished")
+    if busy := running(r"granit\.ingest\.worker|granit ingest"):
+        raise SystemExit(
+            f"ingest is running (Phase A); ask again when it has finished (process {busy[:120]})"
+        )
     print("starting the Q&A model…", file=sys.stderr)
     with server:
         server.wait_ready()

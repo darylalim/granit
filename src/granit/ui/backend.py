@@ -14,7 +14,6 @@ No Streamlit import here, so it's unit-tested with fake phases (``tests/unit/tes
 
 from __future__ import annotations
 
-import subprocess
 import threading
 import time
 from collections import deque
@@ -24,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from granit.models.phases import Phase, PhaseManager
+from granit.models.procs import running
 from granit.store.db import Source, Store
 
 TICK_S = 2.0
@@ -35,14 +35,7 @@ OTHER_PHASE_PATTERN = (
 
 
 def other_phase_running() -> str | None:
-    try:
-        out = subprocess.run(
-            ["pgrep", "-fl", OTHER_PHASE_PATTERN], capture_output=True, text=True, timeout=3
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    lines = [line for line in out.stdout.splitlines() if line.strip()]
-    return lines[0] if lines else None
+    return running(OTHER_PHASE_PATTERN)
 
 
 @dataclass

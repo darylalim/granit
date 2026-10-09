@@ -1,4 +1,4 @@
-# Granite Local Stack: Plan v51 (M2 Max, 32 GB)
+# Granite Local Stack: Plan v52 (M2 Max, 32 GB)
 
 A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite models:
 
@@ -12,7 +12,7 @@ A fully local, commercially usable (Apache-2.0) pipeline built on IBM Granite mo
 | Granite Embedding Reranker English R2 (149M) | Re-scores the top search candidates (question + passage read together) |
 | Granite Guardian 4.1 8B | Yes/no judge: groundedness and relevance of answers, custom checks (evaluation in v1; batch verify job in v1.1) |
 
-Status: **v51: version 1.3.0 (CI publishes the release on merge, §4.3). v50: M10 speakers in search built (§3.8 *As built*; public speaker questions 1 / 4 → 4 / 4, no regressions). v49: M10 planned: named speakers in search and Ask (§3.8; release 1.3.0). v48: speech-model spike: no allowed model beats TurboCTC on the meetings; it stays (§3.5 *Stronger models*). v47: two fixes for mtg-01 tried and rejected (§4.9 *Private set*, item 4). v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
+Status: **v52: private role question `spk-01` measured on real audio: names off "the speaker", names on *Project Manager* (§3.8 *As built*; no regressions). v51: version 1.3.0 (CI publishes the release on merge, §4.3). v50: M10 speakers in search built (§3.8 *As built*; public speaker questions 1 / 4 → 4 / 4, no regressions). v49: M10 planned: named speakers in search and Ask (§3.8; release 1.3.0). v48: speech-model spike: no allowed model beats TurboCTC on the meetings; it stays (§3.5 *Stronger models*). v47: two fixes for mtg-01 tried and rejected (§4.9 *Private set*, item 4). v46: shifted table row labels corrected from the PDF text layer (§3.6 item 9); private fact coverage 0.833 → **0.870**, past its 0.85 goal. v45: version 1.2.0 (CI publishes the release on merge, §4.3). v44: M9 speakers built (§3.7 *As built*; public set unchanged and passing; private action items 0.467 → 0.567; Phase A 17.1 GB). v43: M9 planned: speakers at ingest, named by the user, in meeting summaries (§3.7; release 1.2.0). v42: speaker diarization licenses checked; OpenMDW-1.1 approved, Nemotron 3 Diarization pinned; spike steps 1–2 measured: named speakers lift owners on a real meeting (§3.5, §7). v41: version 1.1.0 (CI publishes the release on merge, §4.3). v40: M8 verify job built (§2.4 *As built*). v39: version 1.0.0 (CI publishes the release on merge, §4.3); M0–M7 done; **both eval sets pass the 1.0 criteria** (private thresholds calibrated, §4.9 *Pass criteria*); Guardian judge check passed; real-world private set built and run; Vision page pass for photos and scans, merged table headers (private fact coverage 0.648 → 0.741 → 0.796 → 0.833); action-item scoring and the summary prompt fixed (private action items 0.283 → 0.467, §4.9 *Private set*, item 5); receipt sums checked (item 6); private WER triaged (item 4); form values checked against the PDF text layer (public extraction 0.935 → 0.984); the library's names and terms spell recordings (public WER 0.055 → 0.029). The private set does not pass yet (§4.9 *Private set*).** Sizes and dependency versions checked on Hugging Face / PyPI on 2026-10-03;
 speeds and memory measured with `granit bench` on 2026-10-04 (§3.3).
 Speeds are estimates and get measured in M1.
 
@@ -239,6 +239,11 @@ RAG speaker rule was not added (nothing left for it to improve); private role qu
 **Changes in v51:** **1.3.0**: M10 is built, so the version goes 1.2.0 → 1.3.0 (`uv version --bump minor`, §4.3 *Version
 plan*); it also carries v46's table row labels. The merge to `main` publishes the release. Next (1.x): private role questions
 (§3.8 *As built*, a re-fetch); the rest of the private goals are model- or data-limited (v47, v48).
+
+**Changes in v52:** the private role question `spk-01` landed with a re-fetch and was measured with names off and on (§3.8 *As
+built*): only the named run answers *Project Manager*; both cite the line (34:48–34:57). M10 works on real audio. Private set
+passes with no regressions; speaker questions stay outside the headline fact coverage.
+
 ---
 
 ## 1. Scope (v1)
@@ -1077,6 +1082,13 @@ speaker (possible later: the turns could be stored per chunk).
   reading, not names. `spk-01` asks who said they'd put up the minutes (*"I will make sure to put up the minutes…"*; expected
   *Project Manager*). It lands with the next re-fetch; measure it with names off and on (one question: a yes / no check that
   M10 works on real audio, not a score).
+- **Measured after 1.3.0 (2026-10-08, main 06fbc46, v52):** the re-fetch added only `spk-01` to the questions (WER and
+  extraction scores identical, so the other references are too). Private eval with the four roles named: `spk-01` facts 1.0,
+  recall 1.0; all criteria pass, **0 regressions** against a clean baseline on the same commit (headline facts 0.870
+  unchanged, as speaker questions are kept out of it; MRR@8 −0.01 in every mode from the added question). `granit ask` on a
+  copy of the library, each in a fresh process: **names off** "the speaker said they would make sure to put up the minutes…"
+  (34:57; no name guessed, §3.7); **names on** "the Project Manager said…", quoting the line (34:48). The words never say who
+  the Project Manager is, so the names supply the answer.
 
 ## 4. Development toolchain
 
@@ -2190,4 +2202,4 @@ About 13½–15½ days for v1, plus 1½ days for M8 (v1.1), 2–2½ for M9 (v1.2
 | Voice input | Deferred to v2 (mlx-audio `realtime_vad` / `smart_turn` as candidates, licenses checked then) |
 | Evaluation | **Four levels** (unit, golden, benchmarks, quality); **public synthetic + private** eval sets in the same format; labeled `gold_refs`; metrics for retrieval, answers (incl. unanswerable), extraction, summaries, ASR; **1.0 pass criteria on both sets**; Guardian scores count only after ≥ 85 % agreement; results history + `eval compare`; per-stage `retrieval_trace`; **no Arize Phoenix** (ELv2, telemetry on by default) |
 | Speakers (v43) | **Nemotron 3 Diarization** (OpenMDW-1.1, fp32 MLX, Phase A) + **user-named speakers**; only named speakers' turns are labelled for the LLM; no cross-recording voice identity (§3.7) |
-| Next step | **M10 speakers in search (§3.8)** → 1.3.0. Private goals: v46 reached fact coverage; extraction, action items and WER are model- or data-limited (v47, v48) |
+| Next step | Use 1.3.0 on real files; M10 checked on real audio (v52). Private goals: v46 reached fact coverage; extraction, action items and WER are model- or data-limited (v47, v48) |

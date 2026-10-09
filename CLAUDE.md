@@ -59,7 +59,12 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **Speaker names in chunks (M10, PLAN.md §3.8):** `set_speaker_names` queues a `reindex` only when the names *change*. A change that
   must reach recordings already named (chunk format, schema) needs a migration that queues `reindex` jobs (as migration 5 does).
 - **Eval result files are named `<date>-<sha>[-dirty]-<set>.json`:** a second run on the same commit overwrites the first. Copy the
-  baseline file before re-running for an A/B.
+  baseline file before re-running for an A/B (`eval run` has no output option). Public results go to `eval/results/`, private ones
+  to `data/eval/results/`: only the user copies those (give them a `!` command).
+- **The eval runner always names speakers** from the references (`Runner._name_speakers`): to measure names off, run
+  `granit meeting`/`ask` on a library copy instead (see the `cp -R` command above).
+- **macOS `pgrep` never matches its own parent processes** (`-a` includes them): a phase check can't be tripped by the shell that
+  ran it, so look elsewhere when a refusal says a phase is running but none is.
 - **The Bash tool's shell is zsh:** `$var` isn't word-split (`set -- $spec` passes one argument). Write arguments out, or use `${=var}`.
 - **`eval compare` flags:** confirm with a fresh-process A/B before blaming a change; `*.s_per_table` timing rows flag at +0.02 s (noise); re-running `fetch_real_eval.py` rewrites the private set's references and schemas, so the next run isn't comparable on those metrics.
 - **Hook H3 matches the banned speech-model name anywhere in a Bash command**, heredoc text included: put scripted edits that mention it in a script file and run that.

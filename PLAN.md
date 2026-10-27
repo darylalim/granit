@@ -1765,6 +1765,10 @@ dependency group, so CI doesn't install it). **M6 result (2026-10-04):** 24 scre
 the chat input aligned with the conversation at every width; Ask sources and Extract fields **beside** at 1512 and 2560 px,
 **below** at 760 px; answers **~97 characters per line** at 15 px (wrapped prose measured in a chat message) at every width.
 
+**README screenshots:** `scripts/readme_screenshots.py` takes Ask (one cited answer), Library (a recording, a document) and
+Extract at 1512 px, light and dark, into `docs/screenshots/`. It works on a temporary copy of the public eval library and clears
+the copy's Ask history first, so no user files appear and the eval library is unchanged.
+
 ### 4.9 Evaluation design
 
 **Four levels**, from cheap and frequent to expensive and occasional:
@@ -2074,6 +2078,7 @@ granit/
 ├── app/Home.py + app/app_pages/  # Streamlit: Ingest, Library, Ask, Extract (page scripts only)
 ├── src/granit/ui/            # layout.py (widths, safe_md), views.py (page data), backend.py (phases + Q&A), session.py
 ├── scripts/ui_screenshots.py # M6 check: every page × 3 widths × light/dark (§4.8)
+├── scripts/readme_screenshots.py # README images (docs/screenshots/) from a copy of the public eval library (§4.8)
 ├── scripts/make_audio_fixtures.py  # test audio via macOS `say` + `afconvert` (§3.5)
 ├── scripts/make_eval_fixtures.py   # public eval set: invoice PDFs (Playwright) + scripted meetings (`say`) + questions (§4.9)
 ├── eval/public/              # committed synthetic eval set: questions.yaml, extraction/, summaries/ (§4.9)

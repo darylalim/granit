@@ -49,8 +49,8 @@ def loads_models(argv: list[str]) -> bool:
         if rest[:1] and rest[0] in MODEL_CLI_COMMANDS:
             return True
         return rest[:1] == ["models"] and rest[1:2] != [] and rest[1] in MODEL_CLI_MODEL_ACTIONS
-    if any(a.endswith("ui_screenshots.py") for a in argv):
-        return True  # starts the app (§4.8 layout check)
+    if any(a.endswith(("ui_screenshots.py", "readme_screenshots.py")) for a in argv):
+        return True  # starts the app (§4.8 layout check, README screenshots)
     if (cmd == "streamlit" or module == "streamlit") and args[:1] == ["run"]:
         return True  # the granit app (or any Streamlit script that might import it)
     if module and (

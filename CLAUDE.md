@@ -24,6 +24,7 @@ uv run granit speakers SOURCE [1=Priya 2='Project Manager']  # list / name a rec
 uv run granit verify [--data DIR]  # Guardian checks unverified answers + summaries (M8, Phase C; not while Q&A runs)
 uv run granit ui [--data DIR]  # the app: Ingest, Library, Ask, Extract (M6)
 uv run --group screenshots python scripts/ui_screenshots.py --data DIR  # §4.8 layout check (30 screenshots: 5 pages incl. a recording)
+uv run --group screenshots python scripts/readme_screenshots.py  # README images in docs/screenshots/, from a copy of the public eval library
 uv run granit eval run --set public|private [--no-judge] [--fresh]  # quality eval (M7, ~15 min); results in eval/results/
 uv run granit eval compare A.json B.json  # flags regressions ≥ 2 points; run before merging model/prompt/retrieval changes
 uv run granit eval run --set public --fresh  # needed after ingest/chunking/ASR changes or regenerating eval/public (every file's sha changes)
@@ -68,6 +69,9 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
 - **The Bash tool's shell is zsh:** `$var` isn't word-split (`set -- $spec` passes one argument). Write arguments out, or use `${=var}`.
 - **`eval compare` flags:** confirm with a fresh-process A/B before blaming a change; `*.s_per_table` timing rows flag at +0.02 s (noise); re-running `fetch_real_eval.py` rewrites the private set's references and schemas, so the next run isn't comparable on those metrics.
 - **Hook H3 matches the banned speech-model name anywhere in a Bash command**, heredoc text included: put scripted edits that mention it in a script file and run that.
+- **Ask history is stored in the library** (`qa_turns`) and reloads on the next visit: screenshots or demos from a library
+  show its old questions (e.g. the eval run's) unless you clear them on a copy, as `readme_screenshots.py` does.
+  README images come only from the public eval library, never `data/` user files.
 - **Screenshots of Streamlit pages:** `full_page=True` captures only the viewport (the app scrolls an inner container); screenshot an element (`page.locator("[data-testid=stExpander]")`) instead.
 - `config.py` and `.claude/hooks/*` are standard library only (hooks run with the system `python3`, 3.11+).
 

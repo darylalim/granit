@@ -76,6 +76,12 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
   show its old questions (e.g. the eval run's) unless you clear them on a copy, as `readme_screenshots.py` does.
   README images come only from the public eval library, never `data/` user files.
 - **Screenshots of Streamlit pages:** `full_page=True` captures only the viewport (the app scrolls an inner container); screenshot an element (`page.locator("[data-testid=stExpander]")`) instead.
+- **Playwright video:** call `page.video.path()` inside `sync_playwright()` (after `context.close()`); the video runs ~0.5 s behind the script's clock, so trim cut points away from navigations.
+- **After a dependency spike:** `uv remove` leaves an empty group in `pyproject.toml`/`uv.lock`; restore both with `git restore pyproject.toml uv.lock && uv sync` (exact sync also removes packages a library installed at runtime, e.g. spaCy models).
+- **Phase B's server process** is `python -m granit.models.mlx_server` (the cache-limit wrapper), not `mlx_lm`: match that in `pgrep`/`ps`; measure memory by process tree, since a name match for Chrome also counts the user's own browser.
+- **New scripts that start the app or the CLI** (`scripts/*.py`): add the file name to `guard_memory.loads_models` and a case to `test_hooks.py`, or hook H4 won't guard them (as `demo_video.py`).
+- **Unit tests for `scripts/*.py`:** load by path (`importlib.util.spec_from_file_location`), set `sys.modules[name]` before `exec_module` (dataclasses look their module up), and import Playwright inside functions (CI has no `screenshots` group); see `tests/unit/test_demo_*.py`.
+- **Hook H1 runs `ruff format` + `ruff check --fix` after each Write/Edit of a `.py` file:** a later scripted replacement must match the formatted text, so re-read long lines (rewrapped) before targeting them.
 - `config.py` and `.claude/hooks/*` are standard library only (hooks run with the system `python3`, 3.11+).
 
 ## Layout

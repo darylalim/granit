@@ -1,7 +1,7 @@
 """Demo video, raw take (docs/demo-plan.md): prepare a library copy, then record shots 2–7 with Playwright.
 
     uv run --group screenshots python scripts/demo_video.py prepare [--library DIR] [--out DIR]
-    uv run --group screenshots python scripts/demo_video.py record [--out DIR] [--theme light|dark]
+    uv run --group screenshots python scripts/demo_video.py record [--out DIR] [--theme dark|light]
 
 ``prepare`` copies the public eval library (synthetic files only, never your own) to ``OUT/library`` and gets it ready to
 film: speaker 1 of the Atlas check-in is named (its ``reindex`` runs now, in phase A), the meeting is summarized again with
@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     rec = sub.add_parser(
         "record", help="record shots 2–7 from a fresh copy of the prepared library"
     )
-    rec.add_argument("--theme", choices=("light", "dark"), default="light")
+    rec.add_argument("--theme", choices=("light", "dark"), default="dark")
     rec.add_argument("--port", type=int, default=8596)
     for p in (prep, rec):
         p.add_argument("--out", type=Path, default=ROOT / "build/demo")

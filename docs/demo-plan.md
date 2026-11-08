@@ -70,7 +70,8 @@ hand; it isn't committed.
   answer 11–13 s, then the on-camera answer in **5.1 s** (two takes, identical).
 - The warm-up also clears the "Loading the search models…" banner that every page shows until the query models are
   loaded. `settle` doesn't wait for it, so no recorded page may open before the warm-up finishes.
-- **Recording context: viewport and `record_video_size` both 1536×864,** light theme (dark as a second take, if wanted).
+- **Recording context: viewport and `record_video_size` both 1536×864,** dark theme (chosen after watching a light take; `--theme light`
+  records one).
   The edit step upscales to 1920×1080 (lanczos), which makes text ~25% larger and still sharp. Tested and rejected:
   - 1920×1080 at scale 1: sharp, but the app's maximum content width leaves the right ~35% of the frame empty.
   - `device_scale_factor=1.25`: Chromium's screencast records CSS pixels, so the page lands in the corner of the frame
@@ -81,8 +82,8 @@ hand; it isn't committed.
 - Natural-looking input:
   - typing with `page.keyboard.type(text, delay=60)`
   - `page.mouse.move(x, y, steps=25)` to an element before clicking it
-  - a short-lived highlight ring injected around the clicked element (CSS `outline` on a `data-demo` attribute, removed
-    after 600 ms), only in the demo context
+  - a drawn cursor and a 600 ms ring at each click, injected only in the recording context: headless Chrome draws
+    neither, so clicks would come out of nowhere
 - Scroll with `element.scrollIntoView({behavior: "smooth"})`: the app scrolls an inner container, so mouse-wheel scrolling
   on the page doesn't move it.
 - **Beat log:** `beats.json` records each shot's start and end time (seconds since the video started), plus `wait`

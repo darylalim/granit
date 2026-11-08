@@ -5,19 +5,24 @@ per shot; the number after the last `·` in each heading is the shot's length in
 when a clip runs longer.
 
 Written for the ear, not the eye: "granite" for granit, "M L X" for MLX (`say` reads "PDFs", "IBM" and "JSON" well as
-they are). Captions come from the shot list, so they show the real names. Lines starting with `>` are notes and aren't
-read. A blank line inside a section is a pause (`--pause`, 450 ms): put one where a speaker would breathe.
+they are). The YouTube subtitles turn them back into the real names. Lines starting with `>` are notes and aren't
+read; `> Caption:` is the shot's on-screen caption (`demo_edit.py`), or a card's lines split by `|` (shots 1 and 8).
+A blank line inside a section is a pause (`--pause`, 450 ms): put one where a speaker would breathe.
 
 Written the way people talk: short sentences, contractions, one idea at a time. Zoe ignores `[[emph +]]` and won't read
 slower than her default, so the rhythm has to come from the text and the pauses (spike, 2026-11-08).
 
 ## 1 · Title · 8 s
 
+> Caption: Private document & meeting intelligence | Runs entirely on your Mac
+
 This is granite.
 
 Private document and meeting intelligence, running entirely on your Mac.
 
 ## 2 · Ingest · 17 s
+
+> Caption: Drop in PDFs, scans and recordings
 
 Start by dropping in your files. PDFs, scans, meeting recordings.
 
@@ -26,12 +31,16 @@ locally, with IBM Granite models on Apple's M L X. Nothing leaves your Mac.
 
 ## 3 · Document · 18 s
 
+> Caption: Documents become Markdown, tables included
+
 Here's a project status report. It's turned into clean Markdown, with its headings, text and tables intact.
 
 Each table is also kept as data, right next to a picture of where it came from. And for tricky tables, an accurate mode
 reads them again with Granite Vision.
 
 ## 4 · Speakers · 22 s
+
+> Caption: Who spoke when. Name the people you recognize
 
 Recordings are transcribed with timestamps, and granite works out who spoke when.
 
@@ -42,12 +51,16 @@ granite only uses the names you give it. It never guesses who someone is. And no
 
 ## 5 · Summary · 15 s
 
+> Caption: Summaries with decisions and action items
+
 Every meeting gets a summary. What was discussed, what was decided, and who's doing what. The owners come from the names
 you gave.
 
 You can even write your own rules, like "every action item has an owner", and have Granite Guardian check them.
 
 ## 6 · Ask · 28 s
+
+> Caption: Cited answers, fully offline
 
 > The question is typed on screen while this plays; the answer arrives about six seconds after it's sent.
 
@@ -62,10 +75,14 @@ sources.
 
 ## 7 · Extract · 10 s
 
+> Caption: Forms → validated JSON
+
 Forms work too. Give it an invoice and a JSON schema, and you get the fields back, checked against the schema, and ready
 to download.
 
 ## 8 · End · 5 s
+
+> Caption: github.com/darylalim/granit | Apache-2.0 · IBM Granite on MLX
 
 granite.
 

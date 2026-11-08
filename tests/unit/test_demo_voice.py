@@ -111,3 +111,9 @@ def test_paragraphs_are_read_with_a_pause_between_them(voice: ModuleType) -> Non
 def test_pause_commands_arent_counted_as_words(voice: ModuleType) -> None:
     section = voice.Section(1, "Title", 10.0, "This is granite.\n\nPrivate by design.")
     assert voice.fit(section, 5.0).words == 6
+
+
+def test_a_caption_note_is_kept_but_not_read(voice: ModuleType) -> None:
+    script = "## 6 · Ask · 28 s\n\n> Caption: Cited answers, fully offline\n> just a note\n\nNow a question.\n"
+    (section,) = voice.parse_script(script)
+    assert (section.caption, section.text) == ("Cited answers, fully offline", "Now a question.")

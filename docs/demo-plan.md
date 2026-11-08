@@ -1,6 +1,6 @@
-# Demo video plan: "granit in 3 minutes"
+# Demo video plan: "granit in 2 minutes"
 
-A 3-minute YouTube overview, recorded automatically with Playwright from the public eval library, narrated by a local
+A 2-minute YouTube overview, recorded automatically with Playwright from the public eval library, narrated by a local
 text-to-speech voice. Nothing in it comes from `data/` user files.
 
 ## Storyline
@@ -19,18 +19,22 @@ and the recording, and quotes a named speaker, which shows documents, audio, spe
 answer. The narration should say "cites the report and the recording", not "the moment it was said": the check-in is
 25 s long and one chunk, so its citation is always 0:00.
 
-## Shot list (~180 s)
+## Shot list (~123 s)
+
+First planned at 3:00. Cut to ~2:00 (2026-11-08) once the footage and narration were measured: at 3:00 most shots
+would have held a frozen last frame for half their length. Each shot is now the longer of its narration and its
+footage, plus ~2 s; the lengths live in `docs/demo/voiceover.md`'s headings, which `demo_voice.py` checks against.
 
 | # | Time | Page | On screen | Caption |
 |---|---|---|---|---|
-| 1 | 0:00–0:10 | Title card | Name + tagline | "Private document & meeting intelligence. Runs entirely on your Mac." |
-| 2 | 0:10–0:30 | Ingest | Queue with both files at "done" | "Drop in PDFs, scans and recordings" |
-| 3 | 0:30–0:55 | Library → `atlas-status.pdf` | Content tab, then "Tables and charts" | "Documents become Markdown, tables included" |
-| 4 | 0:55–1:30 | Library → `atlas-checkin.m4a` | Speakers panel → type a name → Transcript tab | "Who spoke when. Name the people you recognize" |
-| 5 | 1:30–1:55 | Same recording | Summary tab: decisions + action items | "Summaries with decisions and action items" |
-| 6 | 1:55–2:40 | Ask | Type the go-live question; answer streams; Sources panel | "Cited answers from the report *and* the meeting · offline" |
-| 7 | 2:40–2:55 | Extract → `inv-01.pdf` | Invoice beside its JSON fields | "Forms → validated JSON" |
-| 8 | 2:55–3:00 | End card | Repo URL, "Apache-2.0 · IBM Granite on MLX" | |
+| 1 | 0:00–0:08 | Title card | Name + tagline | "Private document & meeting intelligence. Runs entirely on your Mac." |
+| 2 | 0:08–0:25 | Ingest | Queue with both files at "done" | "Drop in PDFs, scans and recordings" |
+| 3 | 0:25–0:43 | Library → `atlas-status.pdf` | Content tab, then "Tables and charts" | "Documents become Markdown, tables included" |
+| 4 | 0:43–1:05 | Library → `atlas-checkin.m4a` | Speakers panel → type a name → Transcript tab | "Who spoke when. Name the people you recognize" |
+| 5 | 1:05–1:20 | Same recording | Summary tab: decisions + action items | "Summaries with decisions and action items" |
+| 6 | 1:20–1:48 | Ask | Type the go-live question; answer streams; Sources panel | "Cited answers from the report *and* the meeting · offline" |
+| 7 | 1:48–1:58 | Extract → `inv-01.pdf` | Invoice beside its JSON fields | "Forms → validated JSON" |
+| 8 | 1:58–2:03 | End card | Repo URL, "Apache-2.0 · IBM Granite on MLX" | |
 
 ## Pipeline
 
@@ -39,7 +43,7 @@ Four steps, each its own process (one phase at a time, PLAN.md §2.1):
 ```bash
 uv run --group screenshots python scripts/demo_video.py prepare  # library copy: speaker named, reindexed, summarized
 uv run --group screenshots python scripts/demo_video.py record   # demo-raw.webm + beats.json (phase B)
-uv run python scripts/demo_voice.py                              # voiceover.md → one WAV per shot (macOS say)
+uv run python scripts/demo_voice.py                              # docs/demo/voiceover.md → one WAV per shot (macOS say)
 uv run --group screenshots python scripts/demo_edit.py           # cut, captions, cards, audio → demo.mp4
 ```
 
@@ -95,20 +99,26 @@ hand; it isn't committed.
 
 ### 3. Voiceover (local TTS)
 
-- **Script:** `docs/demo/voiceover.md`, one section per shot, about 400 words in total (≈ 140 words a minute). Each
-  section must fit its shot's length; `demo_voice.py` warns when a clip runs longer than its shot.
+- **Script:** `docs/demo/voiceover.md`, one `## N · Name · S s` section per shot (S: the shot's length in the video).
+  `demo_voice.py` fails when a clip runs longer than its shot. Zoe (Premium) reads ≈ 185 words a minute, not the 140
+  first assumed: the first draft (229 words) filled 75 s of the 3:00 first planned, so it was expanded and rewritten (313 words, 104 s).
+- **Smoothness:** written the way people talk (short sentences, contractions), with a pause (`[[slnc 450]]`,
+  `--pause`) at each blank line inside a section. Measured with Zoe (Premium): `[[slnc]]` adds exact silence, `…` or
+  `—` about 0.3 s; `[[emph +]]` changes nothing, `-r` can't go slower than her default and `[[rate]]` barely does.
 - **Voice: macOS `say`** with a Premium voice. It's part of the system: no dependency, model or license to add, and
   no GPU, so it can run at any time.
-  - One-time setup by hand: System Settings → Accessibility → Spoken Content → System Voice → Manage Voices, download
-    e.g. "Zoe (Premium)". Only the basic voices (Samantha, Daniel) are installed by default.
+  - One-time setup by hand: System Settings → Accessibility → Spoken Content → System Voice (ⓘ) → download e.g.
+    "Zoe (Premium)" (or search Settings for "Spoken Content"). Only the basic voices are installed by default.
   - `demo_voice.py` takes the voice as `--voice` (default "Zoe (Premium)") and checks `say -v '?'` first, stopping
     with the setup steps above if the voice isn't installed. `say` itself exits 0 with a missing voice and silently
-    uses the default one, so this check is the only safeguard.
+    uses the default one, so this check is the only safeguard. Long names get one space before the locale column
+    ("Daniel (English (UK)) en_GB"), so names are read up to the locale, not up to a double space.
   - Per shot: `say -v VOICE -r RATE --file-format=WAVE --data-format=LEI16@24000 -o voice/shot-N.wav -f shot-N.txt`.
     `-r` (words per minute, default ≈ 175) is the knob for fitting a clip to its shot.
   - Pronunciation: `voiceover.md` is written for the ear ("granite" for granit, "M L X" for MLX). Captions come from
     the shot list, so they still show the real names. Check each clip by ear.
-- Output: `voice/shot-N.wav`, 24 kHz mono, loudness normalized to −16 LUFS in the edit step.
+- Output: `build/demo/voice/shot-N.wav` (24 kHz, 16-bit mono), the text read (`shot-N.txt`) and `voice-report.json`
+  (words, clip and shot lengths). Loudness is normalized to −16 LUFS in the edit step. ~10 s for all eight clips.
 
 **Rejected: Kokoro-82M via mlx-audio** (spike, 2026-11-08). The weights are Apache-2.0 and quality was good (≈ 8× faster
 than real time once warm, 2.8 GB peak), but its English front end (`misaki[en]`) fails `test_dependency_licenses.py`:
@@ -137,7 +147,7 @@ are silently skipped. spaCy also installed `en_core_web_sm` into `.venv` by itse
 
 | Decision | Choice | Why |
 |---|---|---|
-| Length / audience | 3-minute overview | YouTube discovery; the README covers the details |
+| Length / audience | 2-minute overview (first 3:00) | YouTube discovery; the README covers the details |
 | Structure | One storyline (Project Atlas) | The cross-source question shows every feature working together |
 | Recording | Playwright, automated | Repeatable after UI changes; reuses the screenshot tooling |
 | Speaker naming | (a) name pre-set on the copy, retyped on camera | Ask sees the name without a phase-A reindex mid-recording |
@@ -167,6 +177,6 @@ are silently skipped. spaCy also installed `en_core_web_sm` into `.venv` by itse
 
 1. `scripts/demo_video.py` (`prepare`, `record`) + shared helpers with the screenshot scripts
 2. `docs/demo/voiceover.md` (narration, timed per shot)
-3. `scripts/demo_voice.py` (`say`, voice check, per-shot WAVs, warns when a clip is longer than its shot)
+3. `scripts/demo_voice.py` (`say`, voice check, per-shot WAVs, fails when a clip is longer than its shot)
 4. `scripts/demo_edit.py` (ffmpeg pipeline, cards, captions, `demo.srt`)
 5. CLAUDE.md: one command line for re-recording the demo

@@ -26,6 +26,7 @@ uv run granit ui [--data DIR]  # the app: Ingest, Library, Ask, Extract (M6)
 uv run --group screenshots python scripts/ui_screenshots.py --data DIR  # §4.8 layout check (30 screenshots: 5 pages incl. a recording)
 uv run --group screenshots python scripts/readme_screenshots.py  # README images in docs/screenshots/, from a copy of the public eval library
 uv run --group screenshots python scripts/demo_video.py prepare|record  # demo video raw take in build/demo/ (docs/demo-plan.md)
+uv run python scripts/demo_voice.py [--voice NAME] [--rate WPM]  # demo voiceover: docs/demo/voiceover.md → build/demo/voice/ (macOS say)
 uv run granit eval run --set public|private [--no-judge] [--fresh]  # quality eval (M7, ~15 min); results in eval/results/
 uv run granit eval compare A.json B.json  # flags regressions ≥ 2 points; run before merging model/prompt/retrieval changes
 uv run granit eval run --set public --fresh  # needed after ingest/chunking/ASR changes or regenerating eval/public (every file's sha changes)

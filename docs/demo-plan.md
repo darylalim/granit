@@ -35,7 +35,7 @@ answer. The narration should say "cites the report and the recording", not "the 
 Four steps, each its own process (one phase at a time, PLAN.md §2.1):
 
 ```bash
-uv run --group screenshots python scripts/demo_video.py prepare  # library copy: names set, reindexed (phase A)
+uv run --group screenshots python scripts/demo_video.py prepare  # library copy: speaker named, reindexed, summarized
 uv run --group screenshots python scripts/demo_video.py record   # demo-raw.webm + beats.json (phase B)
 uv run python scripts/demo_voice.py                              # voiceover.md → one WAV per shot (macOS say)
 uv run --group screenshots python scripts/demo_edit.py           # cut, captions, cards, audio → demo.mp4
@@ -44,22 +44,24 @@ uv run --group screenshots python scripts/demo_edit.py           # cut, captions
 Output goes to a scratch directory (`--out`, default `build/demo/`; `build/` is already gitignored). The finished `demo.mp4` is uploaded by
 hand; it isn't committed.
 
-### 1. Prepare (phase A)
+### 1. Prepare (phases A, then B; ~20 s)
 
-- Copy `data/eval/libraries/public` to a temporary directory, the same way `scripts/readme_screenshots.py` does. The eval
-  library itself is never changed.
-- **Speaker naming, option (a):** set the speaker name that shot 4 types (e.g. `1='Project Manager'`) on the copy with
-  `set_speaker_names`, then run the queued `reindex` with the ingest worker. Ask in shot 6 then sees the name. On camera,
-  shot 4 selects the field's text and types the same name over it, then saves once. `set_speaker_names` compares the
-  saved names with the stored ones (`store/db.py`) and queues nothing when they match. Saving an empty field first would
-  be a real change and queue a `reindex`. **Check:** the summary must not ask to be regenerated after the save.
+- Copy `data/eval/libraries/public` to `build/demo/library`. The eval library itself is never changed.
+- The eval run already named the check-in's speakers 2 and 3 (Sam, Marcus); speaker 1, who runs the meeting, is unnamed.
+- **Speaker naming, option (a):** `granit speakers … 1=Priya` on the copy, then `granit ingest` runs the queued
+  `reindex` (phase A), so Ask in shot 6 sees the name. Then `granit meeting` writes a new summary (phase B) that uses
+  it ("Priya requested Sam to update the barcode scanner firmware…"), so shot 5 isn't marked out of date.
 - Clear `qa_turns` so Ask starts with no history.
-- Generate the meeting summary for `atlas-checkin.m4a` beforehand if the copy has none, so shot 5 doesn't wait on it.
+- `prepare` fails if speaker 1 isn't named, the summary predates the names, a job is queued, or Ask has history.
+- On camera, shot 4 clears speaker 1's field (before the shot's logged start), types the name and saves once. The saved
+  names equal the stored ones, so `set_speaker_names` (`store/db.py`) queues nothing; `record` fails if the take left a
+  job queued, because the app would pause Q&A for it.
 
-### 2. Record (phase B)
+### 2. Record (phase B; ~2 min)
 
-- `scripts/demo_video.py` imports `settle`, `idle`, `wait_for_http`, `wait_until_ready` and `scroll_to` from the
-  screenshot scripts; if they need changes, move them to a small shared module rather than copying them.
+- `record` copies `build/demo/library` to a temporary directory each take, so retakes start from the same state.
+- `scripts/demo_video.py` imports `settle`, `idle`, `wait_for_http`, `wait_until_ready` and `clear_history` from the
+  screenshot scripts.
 - Start Streamlit on the copy with `GRANIT_DATA_DIR` and `HF_HUB_OFFLINE=1` (as `readme_screenshots.py` does).
 - **Warm-up:** ask one throwaway question off camera (before the video context opens), then clear `qa_turns` again. The
   on-camera answer then skips the LLM server start and model load. Measured: Q&A ready 15–19 s after launch, warm-up
@@ -149,8 +151,10 @@ are silently skipped. spaCy also installed `en_core_web_sm` into `.venv` by itse
   the summary is marked stale on camera. Type the exact pre-set name, and check the copy's job queue after recording.
 - **UI changes break the script:** selectors follow the screenshot scripts (`data-testid`, headings). Re-run after UI
   changes and watch the result before uploading.
-- **Shot 6 answer wording:** temperature 0 can still vary with the prompt cache (CLAUDE.md, prompt A/B). The warm-up
-  question is always the same one, so the on-camera answer should be stable; check it in the raw take.
+- **Shot 6 answer wording:** the same in every take (three takes, same warm-up question). With speaker 1 named, it is
+  less clean than without names: "Yes. Both the Atlas status report (source 1 and source [3/4/5]) and the check-in
+  meeting transcript (source 2) state that go-live has moved to November 3 2026." The "[3/4/5]" names sources the
+  answer doesn't cite. **Open:** pick a question wording that answers cleanly, or accept it.
 - **Memory:** the recording test measured Playwright's Chrome at 1.1 GB and Streamlit (query embedder + reranker) at
   1.0 GB peak RSS. The LLM server (`granit.models.mlx_server`) wasn't sampled; PLAN.md §3.3 puts Phase B at ~16 GB
   (19.3 GB at the 16K cap), so the total stays well inside 32 GB. The real script should sample by process tree, not by

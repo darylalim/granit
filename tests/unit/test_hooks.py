@@ -215,6 +215,8 @@ def test_protect_paths_end_to_end(project: Path) -> None:
         "python -m streamlit run app/Home.py --server.port 8599",
         "uv run --group screenshots python scripts/ui_screenshots.py --data lib",
         "uv run --group screenshots python scripts/readme_screenshots.py",
+        "uv run --group screenshots python scripts/demo_video.py prepare",
+        "uv run --group screenshots python scripts/demo_video.py record --theme dark",
     ],
 )
 def test_guard_memory_detects_model_loading(command: str) -> None:

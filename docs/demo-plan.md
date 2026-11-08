@@ -126,22 +126,32 @@ than real time once warm, 2.8 GB peak), but its English front end (`misaki[en]`)
 `espeakng-loader` (no license metadata; bundles GPL-3.0 espeak-ng). Without the fallback, words not in the dictionary
 are silently skipped. spaCy also installed `en_core_web_sm` into `.venv` by itself at runtime, outside `uv.lock`.
 
-### 4. Edit
+### 4. Edit (~20 s)
 
-`scripts/demo_edit.py` calls `ffmpeg` (Homebrew; not a Python dependency):
+`scripts/demo_edit.py` calls `ffmpeg` (Homebrew; not a Python dependency). Everything about a shot (length, narration,
+caption) is in its section of `docs/demo/voiceover.md`; the cut points are in `beats.json`.
 
-1. Cut each shot from `demo-raw.webm` using `beats.json`. Remove each `wait` span, or speed it up ×8 with a small
-   "⏩ thinking" caption if the gap needs explaining.
-2. Fit the video to the voiceover: a shot that's shorter than its clip holds its last frame, and one that's longer is
-   trimmed.
-3. Title and end cards: render small HTML pages (in the app theme's colors) with Playwright to 1920×1080 PNGs, and show
-   each for its shot's length.
-4. Captions: `drawtext` lower-thirds from the shot list, or burn in a `.srt`. Also export `demo.srt` to upload to
-   YouTube as captions.
-5. Audio: the voiceover clips at their shot start times, plus optional royalty-free music at −28 dB with ducking under
-   the voice.
-6. Encode: upscale 1536×864 → 1920×1080 (`scale=1920:1080:flags=lanczos`), H.264 High, CRF 18, 25 fps (Playwright's
-   rate; no frame-rate conversion), `yuv420p`, AAC 192 kbps, `-movflags +faststart`, which suits YouTube.
+1. Checks first: the raw take, a voice clip per section that fits its shot from 0.5 s in, a caption for every card,
+   and a section for every recorded shot.
+2. A recorded shot is cut from `demo-raw.webm` (`trim`), ending 0.5 s before its logged end: the video runs a little
+   behind `beats.json`, and the next page starts loading right after, so the held frame was once a blank white page.
+   Footage shorter than its shot (all of them, at ~2:00) holds its last frame (`tpad`); longer footage would lose the
+   middle of its waits first (each keeps 1 s), then its tail.
+3. Upscale 1536×864 → 1920×1080 (lanczos), 25 fps (Playwright's rate).
+4. Captions: the `> Caption:` note, rendered by Playwright as a transparent 1920×1080 PNG (Source Sans, dark-theme
+   colors) and overlaid at the bottom right, fading in at 0.6 s and out before the cut. At most 760 px wide, so it
+   stays right of the app's main column (the Ask chat input is bottom left); shot 6's is one line ("Cited answers,
+   fully offline") to stay below the Sources panel.
+5. Title and end cards: the shot's caption lines (split at `|`) under "granit", same font and colors; the title fades
+   in from black, the end card out to black.
+6. Audio: the shot's clip from 0.5 s in, at 48 kHz stereo. Segments keep PCM audio (`.mkv`), so after concatenating
+   (video copied) the audio is normalized once (`loudnorm`, −16 LUFS, −1.5 dBTP) and encoded once (AAC 192 kbps):
+   joining AAC segments could leave gaps at the cuts.
+7. `demo.mp4`: H.264 High, CRF 18, `yuv420p`, `+faststart`. Measured: 2:03.0, −16.0 LUFS, 6.4 MB.
+8. `demo.srt`: the narration, sentences grouped up to ~84 characters and timed across each clip by length, with the
+   spellings for the ear turned back ("granite" → granit, "M L X" → MLX). Upload it to YouTube as subtitles.
+
+Not built: music under the voice (no royalty-free track chosen), the "⏩ thinking" speed-up (no shot needs it at ~2:00).
 
 ## Decisions
 
@@ -175,8 +185,10 @@ are silently skipped. spaCy also installed `en_core_web_sm` into `.venv` by itse
 
 ## Work items
 
-1. `scripts/demo_video.py` (`prepare`, `record`) + shared helpers with the screenshot scripts
-2. `docs/demo/voiceover.md` (narration, timed per shot)
-3. `scripts/demo_voice.py` (`say`, voice check, per-shot WAVs, fails when a clip is longer than its shot)
+All done (2026-11-08):
+
+1. `scripts/demo_video.py` (`prepare`, `record`), reusing the screenshot scripts' helpers (#50)
+2. `docs/demo/voiceover.md` (narration, shot lengths, captions) (#51, captions in the edit PR)
+3. `scripts/demo_voice.py` (`say`, voice check, per-shot WAVs, fails when a clip is longer than its shot) (#51)
 4. `scripts/demo_edit.py` (ffmpeg pipeline, cards, captions, `demo.srt`)
-5. CLAUDE.md: one command line for re-recording the demo
+5. CLAUDE.md: a command line per step

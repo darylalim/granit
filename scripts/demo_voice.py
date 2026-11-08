@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_VOICE = "Zoe (Premium)"
 SAMPLE_RATE = 24_000
+CAPTION = "> Caption:"
 HEADING = re.compile(r"^## (\d+) · (.+?) · (\d+(?:\.\d+)?) s$")
 # "Zoe (Premium)       en_US    # Hello! …"; a long name gets one space: "Daniel (English (UK)) en_GB    # …"
 VOICE_LINE = re.compile(r"^(.+?)\s+[a-z]{2,3}_[A-Za-z0-9]+\s+#")
@@ -38,6 +39,7 @@ class Section:
     name: str
     slot_s: float
     text: str
+    caption: str = ""  # from a `> Caption: …` note: the edit step's on-screen caption or card text
 
 
 @dataclass(frozen=True)
@@ -131,13 +133,14 @@ def parse_script(markdown: str) -> list[Section]:
     sections: list[Section] = []
     current: tuple[int, str, float] | None = None
     paragraphs: list[list[str]] = []
+    caption = ""
 
     def close() -> None:
         if current is not None:
             text = "\n\n".join(" ".join(p) for p in paragraphs if p)
             if not text:
                 raise ValueError(f"shot {current[0]} has no text")
-            sections.append(Section(*current, text=text))
+            sections.append(Section(*current, text=text, caption=caption))
 
     for raw in markdown.splitlines():
         line = raw.strip()
@@ -146,7 +149,13 @@ def parse_script(markdown: str) -> list[Section]:
             m = HEADING.match(line)
             if m is None:
                 raise ValueError(f"not a `## N · Name · S s` heading: {line!r}")
-            current, paragraphs = (int(m.group(1)), m.group(2), float(m.group(3))), [[]]
+            current, paragraphs, caption = (
+                (int(m.group(1)), m.group(2), float(m.group(3))),
+                [[]],
+                "",
+            )
+        elif current is not None and line.startswith(CAPTION):
+            caption = line.removeprefix(CAPTION).strip()
         elif current is None or line.startswith(">"):
             continue
         elif line:

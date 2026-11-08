@@ -8,12 +8,14 @@ text-to-speech voice. Nothing in it comes from `data/` user files.
 > A project manager has a status report and a recording of the check-in meeting. Do they agree?
 
 Files (synthetic, from `eval/public/files/`): `reports/atlas-status.pdf`, `meetings/atlas-checkin.m4a`, plus
-`invoices/inv-01.pdf` for the closing Extract shot. The video ends on the eval set's cross-source question:
+`invoices/inv-01.pdf` for the closing Extract shot. The video ends on a question across both:
 
-**"Do the Atlas status report and the check-in meeting agree on the go-live date?"**
+**"When does Project Atlas go live, according to the status report and the check-in meeting?"**
 
-The answer (recording test, 2026-11-08): "Yes. Both the Atlas status report and the check-in meeting state the go-live
-date is November 3, 2026", citing report p. 1 and the recording. That shows documents, audio and search working in one
+The answer (same in every take): "According to the status report, Project Atlas go-live has moved to November 3, 2026
+because the data migration took longer than planned [1]. In the check-in meeting Sam says "the data migration slipped
+so go live moves to november 3" [3]. Both sources agree the go-live date is November 3, 2026." It cites report p. 1
+and the recording, and quotes a named speaker, which shows documents, audio, speaker names and search working in one
 answer. The narration should say "cites the report and the recording", not "the moment it was said": the check-in is
 25 s long and one chunk, so its citation is always 0:00.
 
@@ -151,10 +153,10 @@ are silently skipped. spaCy also installed `en_core_web_sm` into `.venv` by itse
   the summary is marked stale on camera. Type the exact pre-set name, and check the copy's job queue after recording.
 - **UI changes break the script:** selectors follow the screenshot scripts (`data-testid`, headings). Re-run after UI
   changes and watch the result before uploading.
-- **Shot 6 answer wording:** the same in every take (three takes, same warm-up question). With speaker 1 named, it is
-  less clean than without names: "Yes. Both the Atlas status report (source 1 and source [3/4/5]) and the check-in
-  meeting transcript (source 2) state that go-live has moved to November 3 2026." The "[3/4/5]" names sources the
-  answer doesn't cite. **Open:** pick a question wording that answers cleanly, or accept it.
+- **Shot 6 answer wording:** the same in every take (same warm-up question), so the question was chosen by its answer.
+  With speaker 1 named, the eval set's "Do the Atlas status report and the check-in meeting agree on the go-live date?"
+  answered with "(source 1 and source [3/4/5])" in its text. Of three rewordings (2026-11-08), all answered cleanly;
+  the one used quotes Sam by name. A change to the prompt, retrieval or model can change it: check shot 6's last frame.
 - **Memory:** the recording test measured Playwright's Chrome at 1.1 GB and Streamlit (query embedder + reranker) at
   1.0 GB peak RSS. The LLM server (`granit.models.mlx_server`) wasn't sampled; PLAN.md §3.3 puts Phase B at ~16 GB
   (19.3 GB at the 16K cap), so the total stays well inside 32 GB. The real script should sample by process tree, not by

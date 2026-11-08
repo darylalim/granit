@@ -78,6 +78,10 @@ def test_rag_prompt_keeps_to_the_budget() -> None:
         ("Revenue was 145 [2].", [2]),
         ("A [1][3] and B [3].", [1, 3]),
         ("See [1, 3] and [2–3].", [1, 3, 2]),
+        (
+            "Report (source [1] and source [3/2]).",
+            [1, 3, 2],
+        ),  # slashes, as Granite wrote in the demo
         ("Out of range [9] and [0].", []),
         ("No citations.", []),
     ],

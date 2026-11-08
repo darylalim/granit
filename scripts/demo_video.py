@@ -45,7 +45,7 @@ DOCUMENT = "reports/atlas-status.pdf"
 FORM = "invoices/inv-01.pdf"
 SPEAKER, NAME = 1, "Priya"  # the check-in's unnamed speaker (2 and 3 are named by the eval run)
 WARMUP = "What is the approved budget for Project Atlas?"
-# Chosen by its answer (docs/demo-plan.md): the eval set's "Do … agree on the go-live date?" writes "[3/4/5]" into it.
+# Chosen by its answer (docs/demo-plan.md): the eval set's "Do … agree on the go-live date?" cites "[3/4/5]" (now a badge).
 QUESTION = (
     "When does Project Atlas go live, according to the status report and the check-in meeting?"
 )

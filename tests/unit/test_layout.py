@@ -44,6 +44,7 @@ def test_answers_escape_dollars_and_show_citations_as_badges() -> None:
         r"Total \$4,980 :gray-badge[2]; deposit \$1,200 :gray-badge[1, 3]."
     )
     assert answer_md("See [2–4].") == "See :gray-badge[2–4]."
+    assert answer_md("(source [3/4/5])") == "(source :gray-badge[3, 4, 5])"
     assert answer_md("A [link](x) stays.") == "A [link](x) stays."
 
 

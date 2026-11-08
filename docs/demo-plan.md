@@ -176,8 +176,10 @@ Not built: music under the voice (no royalty-free track chosen), the "⏩ thinki
   changes and watch the result before uploading.
 - **Shot 6 answer wording:** the same in every take (same warm-up question), so the question was chosen by its answer.
   With speaker 1 named, the eval set's "Do the Atlas status report and the check-in meeting agree on the go-live date?"
-  answered with "(source 1 and source [3/4/5])" in its text. Of three rewordings (2026-11-08), all answered cleanly;
-  the one used quotes Sam by name. A change to the prompt, retrieval or model can change it: check shot 6's last frame.
+  answered "(source [1] and source [3/4/5])": a slash-separated citation that the badge renderer and
+  `parse_citations` didn't recognize, so "[3/4/5]" showed as raw text and sources 3–5 weren't marked cited. Both now
+  accept slashes (one shared `prompts.CITATION`). Of three rewordings (2026-11-08), all answered cleanly; the one used
+  quotes Sam by name. A change to the prompt, retrieval or model can change it: check shot 6's last frame.
 - **Memory:** the recording test measured Playwright's Chrome at 1.1 GB and Streamlit (query embedder + reranker) at
   1.0 GB peak RSS. The LLM server (`granit.models.mlx_server`) wasn't sampled; PLAN.md §3.3 puts Phase B at ~16 GB
   (19.3 GB at the 16K cap), so the total stays well inside 32 GB. The real script should sample by process tree, not by

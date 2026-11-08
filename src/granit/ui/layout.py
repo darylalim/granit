@@ -16,6 +16,8 @@ import re
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
+from granit.reason.prompts import CITATION
+
 READING_WIDTH = 720  # ~96 characters per line at 15 px Source Sans
 SIDE_PANEL_WIDTH = (
     380  # Ask: sources beside the answer from ~1470 px (13" MacBook Air), below on smaller windows
@@ -64,9 +66,11 @@ def safe_md(text: str) -> str:
     return text.replace("$", r"\$")
 
 
-CITATION = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\]")
-
-
 def answer_md(text: str) -> str:
-    """An answer for ``st.markdown``: ``safe_md``, then citations like ``[2]`` or ``[1, 3]`` as small gray badges."""
-    return CITATION.sub(lambda m: f":gray-badge[{m.group(1)}]", safe_md(text))
+    """An answer for ``st.markdown``: ``safe_md``, then citations like ``[2]`` or ``[1, 3]`` as small gray badges.
+
+    The badge text is the citation as parsed (``prompts.CITATION``), with slashes shown as commas: ``[3/4/5]`` → ``3, 4, 5``.
+    """
+    return CITATION.sub(
+        lambda m: f":gray-badge[{re.sub(r'\s*/\s*', ', ', m.group(1))}]", safe_md(text)
+    )

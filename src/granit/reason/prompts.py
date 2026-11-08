@@ -73,14 +73,15 @@ def rag_prompt(
     return RagPrompt(messages, used, messages_tokens(messages, counter), len(hits) - len(used))
 
 
-_CITATION = re.compile(r"\[(\d+(?:\s*[-–,]\s*\d+)*)\]")
+# Granite also writes lists with slashes: "[3/4/5]" (found in the demo, 2026-11-08), so it parses and renders like "[3, 4, 5]".
+CITATION = re.compile(r"\[(\d+(?:\s*[-–,/]\s*\d+)*)\]")
 
 
 def parse_citations(answer: str, n_sources: int) -> list[int]:
-    """Source numbers cited in an answer (``[2]``, ``[1, 3]``, ``[2–4]``), in order of first appearance, valid only."""
+    """Source numbers cited in an answer (``[2]``, ``[1, 3]``, ``[3/4/5]``, ``[2–4]``), in order of first appearance, valid only."""
     found: list[int] = []
-    for group in _CITATION.findall(answer):
-        for part in re.split(r"\s*,\s*", group):
+    for group in CITATION.findall(answer):
+        for part in re.split(r"\s*[,/]\s*", group):
             if m := re.fullmatch(r"(\d+)\s*[-–]\s*(\d+)", part):
                 numbers = range(int(m.group(1)), int(m.group(2)) + 1)
             else:

@@ -1,7 +1,7 @@
-# Demo video plan: "granit in 2 minutes"
+# Demo video plan: "granit in 90 seconds"
 
-A 2-minute YouTube overview, recorded automatically with Playwright from the public eval library, narrated by a local
-text-to-speech voice. Nothing in it comes from `data/` user files.
+A 90-second YouTube overview, recorded automatically with Playwright from the public eval library, told in on-screen
+captions over CC0 music. Nothing in it comes from `data/` user files.
 
 ## Storyline
 
@@ -16,35 +16,38 @@ The answer (same in every take): "According to the status report, Project Atlas 
 because the data migration took longer than planned [1]. In the check-in meeting Sam says "the data migration slipped
 so go live moves to november 3" [3]. Both sources agree the go-live date is November 3, 2026." It cites report p. 1
 and the recording, and quotes a named speaker, which shows documents, audio, speaker names and search working in one
-answer. The narration should say "cites the report and the recording", not "the moment it was said": the check-in is
-25 s long and one chunk, so its citation is always 0:00.
+answer. Captions should say "cites its sources", not "the moment it was said": the check-in is 25 s long and one
+chunk, so its citation is always 0:00.
 
-## Shot list (~123 s)
+## Shot list (88 s)
 
-First planned at 3:00. Cut to ~2:00 (2026-11-08) once the footage and narration were measured: at 3:00 most shots
-would have held a frozen last frame for half their length. Each shot is now the longer of its narration and its
-footage, plus ~2 s; the lengths live in `docs/demo/voiceover.md`'s headings, which `demo_voice.py` checks against.
+First planned at 3:00, cut to ~2:00 (2026-11-08) to fit the measured footage, then narrated by macOS `say` (#51). The
+synthetic voice was dropped the same day (see Voiceover, below): captions now tell the story, so each shot is its
+footage plus the time to read its captions, and the video is 88 s. The lengths and captions live in
+`docs/demo/captions.md`, which `demo_edit.py` checks.
 
-| # | Time | Page | On screen | Caption |
+| # | Time | Page | On screen | Caption (headline) |
 |---|---|---|---|---|
-| 1 | 0:00–0:08 | Title card | Name + tagline | "Private document & meeting intelligence. Runs entirely on your Mac." |
-| 2 | 0:08–0:25 | Ingest | Queue with both files at "done" | "Drop in PDFs, scans and recordings" |
-| 3 | 0:25–0:43 | Library → `atlas-status.pdf` | Content tab, then "Tables and charts" | "Documents become Markdown, tables included" |
-| 4 | 0:43–1:05 | Library → `atlas-checkin.m4a` | Speakers panel → type a name → Transcript tab | "Who spoke when. Name the people you recognize" |
-| 5 | 1:05–1:20 | Same recording | Summary tab: decisions + action items | "Summaries with decisions and action items" |
-| 6 | 1:20–1:48 | Ask | Type the go-live question; answer streams; Sources panel | "Cited answers from the report *and* the meeting · offline" |
-| 7 | 1:48–1:58 | Extract → `inv-01.pdf` | Invoice beside its JSON fields | "Forms → validated JSON" |
-| 8 | 1:58–2:03 | End card | Repo URL, "Apache-2.0 · IBM Granite on MLX" | |
+| 1 | 0:00–0:05 | Title card | Name + tagline | "Private document & meeting intelligence · Runs entirely on your Mac" |
+| 2 | 0:05–0:15 | Ingest | Queue with both files at "done" | "Drop in PDFs, scans and recordings" |
+| 3 | 0:15–0:27 | Library → `atlas-status.pdf` | Content tab, then "Tables and charts" | "Documents become Markdown, tables included" |
+| 4 | 0:27–0:44 | Library → `atlas-checkin.m4a` | Speakers panel → type a name → Transcript tab | "Name the people you recognize", then at 11 s "Who spoke when" |
+| 5 | 0:44–0:55 | Same recording | Summary tab: decisions + action items | "Every meeting gets a summary" |
+| 6 | 0:55–1:13 | Ask | Type the go-live question; answer streams; Sources panel | "Answers that cite their sources" |
+| 7 | 1:13–1:22 | Extract → `inv-01.pdf` | Invoice beside its JSON fields | "Forms → validated JSON" |
+| 8 | 1:22–1:28 | End card | Repo URL, "Open source, private by design", "Apache-2.0 · IBM Granite on MLX" | |
+
+Captions only say what's on screen. Granite Guardian, which the narration mentioned, never appears in the footage
+(`record` doesn't run `granit verify`), so it goes in the YouTube description instead.
 
 ## Pipeline
 
-Four steps, each its own process (one phase at a time, PLAN.md §2.1):
+Three steps, each its own process (one phase at a time, PLAN.md §2.1):
 
 ```bash
 uv run --group screenshots python scripts/demo_video.py prepare  # library copy: speaker named, reindexed, summarized
 uv run --group screenshots python scripts/demo_video.py record   # demo-raw.webm + beats.json (phase B)
-uv run python scripts/demo_voice.py                              # docs/demo/voiceover.md → one WAV per shot (macOS say)
-uv run --group screenshots python scripts/demo_edit.py           # cut, captions, cards, audio → demo.mp4
+uv run --group screenshots python scripts/demo_edit.py --music build/demo/music/city-loop.mp3  # cut, captions, cards, music → demo.mp4
 ```
 
 Output goes to a scratch directory (`--out`, default `build/demo/`; `build/` is already gitignored). The finished `demo.mp4` is uploaded by
@@ -97,28 +100,13 @@ hand; it isn't committed.
 {"shots": [{"id": 6, "start": 101.2, "end": 158.9, "waits": [[107.0, 131.5]]}]}
 ```
 
-### 3. Voiceover (local TTS)
+### 3. Voiceover (removed)
 
-- **Script:** `docs/demo/voiceover.md`, one `## N · Name · S s` section per shot (S: the shot's length in the video).
-  `demo_voice.py` fails when a clip runs longer than its shot. Zoe (Premium) reads ≈ 185 words a minute, not the 140
-  first assumed: the first draft (229 words) filled 75 s of the 3:00 first planned, so it was expanded and rewritten (313 words, 104 s).
-- **Smoothness:** written the way people talk (short sentences, contractions), with a pause (`[[slnc 450]]`,
-  `--pause`) at each blank line inside a section. Measured with Zoe (Premium): `[[slnc]]` adds exact silence, `…` or
-  `—` about 0.3 s; `[[emph +]]` changes nothing, `-r` can't go slower than her default and `[[rate]]` barely does.
-- **Voice: macOS `say`** with a Premium voice. It's part of the system: no dependency, model or license to add, and
-  no GPU, so it can run at any time.
-  - One-time setup by hand: System Settings → Accessibility → Spoken Content → System Voice (ⓘ) → download e.g.
-    "Zoe (Premium)" (or search Settings for "Spoken Content"). Only the basic voices are installed by default.
-  - `demo_voice.py` takes the voice as `--voice` (default "Zoe (Premium)") and checks `say -v '?'` first, stopping
-    with the setup steps above if the voice isn't installed. `say` itself exits 0 with a missing voice and silently
-    uses the default one, so this check is the only safeguard. Long names get one space before the locale column
-    ("Daniel (English (UK)) en_GB"), so names are read up to the locale, not up to a double space.
-  - Per shot: `say -v VOICE -r RATE --file-format=WAVE --data-format=LEI16@24000 -o voice/shot-N.wav -f shot-N.txt`.
-    `-r` (words per minute, default ≈ 175) is the knob for fitting a clip to its shot.
-  - Pronunciation: `voiceover.md` is written for the ear ("granite" for granit, "M L X" for MLX). Captions come from
-    the shot list, so they still show the real names. Check each clip by ear.
-- Output: `build/demo/voice/shot-N.wav` (24 kHz, 16-bit mono), the text read (`shot-N.txt`) and `voice-report.json`
-  (words, clip and shot lengths). Loudness is normalized to −16 LUFS in the edit step. ~10 s for all eight clips.
+A narration read by macOS `say` (Zoe (Premium), `scripts/demo_voice.py`, #51) was built and dropped on 2026-11-08: it
+sounded synthetic. Captions plus music replaced it. Its lessons, in case a voice comes back: Zoe reads ≈ 185 words a
+minute; `[[slnc N]]` adds exact silence, but `[[emph +]]` changes nothing and `-r` can't go slower than her default;
+`say` exits 0 with a missing voice and silently reads in the default one. A human recording per shot is the better
+route: one WAV per shot, mixed under the footage the way `demo_edit.py` mixed the `say` clips (see git history, #52).
 
 **Rejected: Kokoro-82M via mlx-audio** (spike, 2026-11-08). The weights are Apache-2.0 and quality was good (≈ 8× faster
 than real time once warm, 2.8 GB peak), but its English front end (`misaki[en]`) fails `test_dependency_licenses.py`:
@@ -126,44 +114,64 @@ than real time once warm, 2.8 GB peak), but its English front end (`misaki[en]`)
 `espeakng-loader` (no license metadata; bundles GPL-3.0 espeak-ng). Without the fallback, words not in the dictionary
 are silently skipped. spaCy also installed `en_core_web_sm` into `.venv` by itself at runtime, outside `uv.lock`.
 
-### 4. Edit (~20 s)
+### 4. Music (CC0, not in the repo)
 
-`scripts/demo_edit.py` calls `ffmpeg` (Homebrew; not a Python dependency). Everything about a shot (length, narration,
-caption) is in its section of `docs/demo/voiceover.md`; the cut points are in `beats.json`.
+The track is passed as `--music FILE` and never committed, so it needs no notice in the repo.
 
-1. Checks first: the raw take, a voice clip per section that fits its shot from 0.5 s in, a caption for every card,
-   and a section for every recorded shot.
+**Chosen: [City Loop](https://opengameart.org/content/city-loop-0) by wipics** (CC0 1.0 in its page's license field;
+upbeat synths and drums; 56 s, so it plays about 1.5 times). Download it to `build/demo/music/city-loop.mp3` from
+`https://opengameart.org/sites/default/files/city-loop.mp3`.
+
+How it was picked (2026-11-08), each candidate rendered under the full video at the same loudness:
+- Calm ambient and piano (First Light Particles, The Budding of Consciousness, Calm Ambient 1, Disturbingly Calm):
+  all rejected, too still for a product overview.
+- Upbeat electronic: City Loop (chosen), Oldskool, Scaling Up, Space Synth Wave, Electronic Synth. "Scaling up" and
+  "Oldskool" also exist as CC-BY 4.0 remixes on OpenGameArt: use the CC0 originals. "Melodic EDM Loops" is only
+  short loops (6.9 s), too repetitive over 88 s.
+
+Even CC0 music can draw a YouTube Content ID claim if someone registered it: check YouTube Studio's Copyright tab while
+the upload is still private.
+
+### 5. Edit (~20 s)
+
+`scripts/demo_edit.py` calls `ffmpeg` (Homebrew; not a Python dependency). Everything about a shot (length, captions)
+is in its section of `docs/demo/captions.md`; the cut points are in `beats.json`.
+
+1. Checks first: the raw take, a section for every recorded shot, one caption line for every card, caption times that
+   start at 0 and increase inside the shot, and every caption on screen long enough to read (3 words a second: viewers
+   also watch the footage).
 2. A recorded shot is cut from `demo-raw.webm` (`trim`), ending 0.5 s before its logged end: the video runs a little
    behind `beats.json`, and the next page starts loading right after, so the held frame was once a blank white page.
-   Footage shorter than its shot (all of them, at ~2:00) holds its last frame (`tpad`); longer footage would lose the
-   middle of its waits first (each keeps 1 s), then its tail.
+   Footage shorter than its shot holds its last frame (`tpad`); longer footage loses the middle of its waits first
+   (each keeps 1 s), then its tail. Shot 6's ~10 s wait for the answer is trimmed to ~3 s: without narration, a long
+   spinner looks frozen.
 3. Upscale 1536×864 → 1920×1080 (lanczos), 25 fps (Playwright's rate).
-4. Captions: the `> Caption:` note, rendered by Playwright as a transparent 1920×1080 PNG (Source Sans, dark-theme
-   colors) and overlaid at the bottom right, fading in at 0.6 s and out before the cut. At most 760 px wide, so it
-   stays right of the app's main column (the Ask chat input is bottom left); shot 6's is one line ("Cited answers,
-   fully offline") to stay below the Sources panel.
-5. Title and end cards: the shot's caption lines (split at `|`) under "granit", same font and colors; the title fades
-   in from black, the end card out to black.
-6. Audio: the shot's clip from 0.5 s in, at 48 kHz stereo. Segments keep PCM audio (`.mkv`), so after concatenating
-   (video copied) the audio is normalized once (`loudnorm`, −16 LUFS, −1.5 dBTP) and encoded once (AAC 192 kbps):
-   joining AAC segments could leave gaps at the cuts.
-7. `demo.mp4`: H.264 High, CRF 18, `yuv420p`, `+faststart`. Measured: 2:03.0, −16.0 LUFS, 6.4 MB.
-8. `demo.srt`: the narration, sentences grouped up to ~84 characters and timed across each clip by length, with the
-   spellings for the ear turned back ("granite" → granit, "M L X" → MLX). Upload it to YouTube as subtitles.
+4. Captions: `headline | detail`, rendered by Playwright as a transparent 1920×1080 PNG (Source Sans, dark-theme
+   colors; a 42 px headline over a 30 px muted detail line) and overlaid at the bottom right. Each fades in at its
+   start (0.6 s into the shot for the first) and out as the next starts or 0.5 s before the cut. At most 820 px wide,
+   so it stays right of the app's main column; keep headlines to one line (shot 6's two-line headline covered the
+   Sources panel).
+5. Title and end cards: the caption's lines (split at `|`) under "granit", same font and colors; the title fades in
+   from black, the end card out to black.
+6. Segments are video only. `join` concatenates them (video copied) and adds the music once: looped or cut to the
+   video's length, faded in (1.5 s) and out (3 s), normalized to −18 LUFS (−1.5 dBTP) in two passes (measure, then
+   one linear gain: one pass landed tracks between −16.1 and −18.0), then AAC 192 kbps. Without `--music` the video
+   has no audio track.
+7. `demo.mp4`: H.264 High, CRF 18, `yuv420p`, `+faststart`. Measured: 1:28.0, −18 ± 0.2 LUFS across the shortlist.
 
-Not built: music under the voice (no royalty-free track chosen), the "⏩ thinking" speed-up (no shot needs it at ~2:00).
+Not built: the "⏩ thinking" speed-up (no shot needs it).
 
 ## Decisions
 
 | Decision | Choice | Why |
 |---|---|---|
-| Length / audience | 2-minute overview (first 3:00) | YouTube discovery; the README covers the details |
+| Length / audience | 90-second overview (first 3:00, then 2:00) | YouTube discovery; the README covers the details |
 | Structure | One storyline (Project Atlas) | The cross-source question shows every feature working together |
 | Recording | Playwright, automated | Repeatable after UI changes; reuses the screenshot tooling |
 | Speaker naming | (a) name pre-set on the copy, retyped on camera | Ask sees the name without a phase-A reindex mid-recording |
 | Ingest shot | Pre-ingested library, queue shown at "done" | Live ingest is minutes long and would need phase A on camera |
 | Offline claim | Caption on shot 6 | Playwright can't switch Wi-Fi off; `HF_HUB_OFFLINE=1` really is set |
-| Voice | Local TTS: macOS `say`, Premium voice | Local like the app, no new dependency; Kokoro fails the license test (see Voiceover) |
+| Sound | CC0 music, captions tell the story (no voice) | macOS `say` sounded synthetic; Kokoro fails the license test (see Voiceover). Captions also reach viewers who watch muted |
 | Data | Public eval library copy only | Synthetic files; never `data/` user files |
 
 ## Risks
@@ -187,10 +195,11 @@ Not built: music under the voice (no royalty-free track chosen), the "⏩ thinki
 
 ## Work items
 
-All done (2026-11-08):
+Done (2026-11-08):
 
 1. `scripts/demo_video.py` (`prepare`, `record`), reusing the screenshot scripts' helpers (#50)
-2. `docs/demo/voiceover.md` (narration, shot lengths, captions) (#51, captions in the edit PR)
-3. `scripts/demo_voice.py` (`say`, voice check, per-shot WAVs, fails when a clip is longer than its shot) (#51)
-4. `scripts/demo_edit.py` (ffmpeg pipeline, cards, captions, `demo.srt`)
-5. CLAUDE.md: a command line per step
+2. A voiceover (`docs/demo/voiceover.md`, `scripts/demo_voice.py`, #51) and its edit (`scripts/demo_edit.py`, #52),
+   then replaced: `docs/demo/captions.md` and captions + music in `demo_edit.py`
+3. CLAUDE.md: a command line per step
+
+Next: upload (private first, check Content ID), then link the video from the README.

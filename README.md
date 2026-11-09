@@ -7,6 +7,10 @@ recordings, convert documents, extract forms and answer questions with citations
 
 The only network traffic is the one-time model download from Hugging Face.
 
+## Demo
+
+[![granit demo video (1:29): ingest a report and a meeting recording, then ask a question across both](docs/screenshots/demo-thumbnail.png)](https://youtu.be/MBoblMP9Siw)
+
 ## Features
 
 - **Meetings:** recording → transcript → summary with decisions and action items.

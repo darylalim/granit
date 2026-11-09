@@ -202,4 +202,5 @@ Done (2026-11-08):
    then replaced: `docs/demo/captions.md` and captions + music in `demo_edit.py`
 3. CLAUDE.md: a command line per step
 
-Next: upload (private first, check Content ID), then link the video from the README.
+Published 2026-11-09 (uploaded private, no Content ID claims, then public): <https://youtu.be/MBoblMP9Siw>, linked from the README with
+`docs/screenshots/demo-thumbnail.png` (the title card, 1280×720, with a play button; also the YouTube thumbnail).

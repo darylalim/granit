@@ -53,6 +53,7 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
   `gh release edit` on a published release only when the user asks. Titles are the bare tag (`v1.3.0`, no `--title`).
 - **PLAN.md §4.3 quotes `ci.yml`'s release step:** edit both together.
 - **Prompt A/B:** run each variant in its own fresh process (`cli._llm_server()` + patched prompt): `mlx_lm.server`'s prompt cache makes temperature-0 output depend on earlier requests (same prompt 0.467 vs 0.383 by order).
+- **Reproduce an Ask answer:** on a library copy, in one `cli._llm_server()` process, ask the same warm-up question first, then `QA.ask(q, record=False)` (writes no `qa_turns`); the answer is then the same every run.
 - **Stacked PRs:** `gh pr merge --delete-branch` on the base closes the PR stacked on it (no retarget). Base PRs on `main`, or merge `main` into the stacked branch and open a new PR.
   PRs are squash-merged (`--squash --delete-branch`, which also deletes the local branch); find leftover branches by `[gone]` in `git branch -vv`, not `--merged`.
 - **Model tests after long eval runs:** the answer-latency checks (`MAX_ANSWER_S`) can fail under load; re-run `tests/models/test_reasoning.py` alone before suspecting the change.
@@ -70,17 +71,20 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
   ran it, so look elsewhere when a refusal says a phase is running but none is.
 - **The Bash tool's shell is zsh:** `$var` isn't word-split (`set -- $spec` passes one argument). Write arguments out, or use `${=var}`.
 - **`eval compare` flags:** confirm with a fresh-process A/B before blaming a change; `*.s_per_table` timing rows flag at +0.02 s (noise); re-running `fetch_real_eval.py` rewrites the private set's references and schemas, so the next run isn't comparable on those metrics.
+- **Parsing/rendering changes (citations, badges):** check the stored answers in copies of both eval libraries (`qa_turns.answer`) for the affected pattern before deciding an `eval run` is needed.
+- **Library databases use WAL:** `sqlite3 -readonly` can't open a copied `granit.db` ("unable to open database file"); open the copy normally (it's a scratch copy).
 - **Hook H3 matches the banned speech-model name anywhere in a Bash command**, heredoc text included: put scripted edits that mention it in a script file and run that.
 - **Ask history is stored in the library** (`qa_turns`) and reloads on the next visit: screenshots or demos from a library
   show its old questions (e.g. the eval run's) unless you clear them on a copy, as `readme_screenshots.py` does.
   README images come only from the public eval library, never `data/` user files.
+- **Demo timing and audio:** find when things happen in `demo-raw.webm` with a contact sheet (`ffmpeg -ss A -to B -vf "fps=1,scale=768:-1,drawtext=text='%{pts\:hms}'…"` then `tile=3x6`); to try other music, call `demo_edit.join()` on the existing `build/demo/edit/seg-*.mkv` (only the audio is encoded). Captions say only what's on screen.
 - **Screenshots of Streamlit pages:** `full_page=True` captures only the viewport (the app scrolls an inner container); screenshot an element (`page.locator("[data-testid=stExpander]")`) instead.
 - **Playwright video:** call `page.video.path()` inside `sync_playwright()` (after `context.close()`); the video runs ~0.5 s behind the script's clock, so trim cut points away from navigations.
 - **After a dependency spike:** `uv remove` leaves an empty group in `pyproject.toml`/`uv.lock`; restore both with `git restore pyproject.toml uv.lock && uv sync` (exact sync also removes packages a library installed at runtime, e.g. spaCy models).
 - **Phase B's server process** is `python -m granit.models.mlx_server` (the cache-limit wrapper), not `mlx_lm`: match that in `pgrep`/`ps`; measure memory by process tree, since a name match for Chrome also counts the user's own browser.
 - **New scripts that start the app or the CLI** (`scripts/*.py`): add the file name to `guard_memory.loads_models` and a case to `test_hooks.py`, or hook H4 won't guard them (as `demo_video.py`).
 - **Unit tests for `scripts/*.py`:** load by path (`importlib.util.spec_from_file_location`), set `sys.modules[name]` before `exec_module` (dataclasses look their module up), and import Playwright inside functions (CI has no `screenshots` group); see `tests/unit/test_demo_*.py`.
-- **Hook H1 runs `ruff format` + `ruff check --fix` after each Write/Edit of a `.py` file:** a later scripted replacement must match the formatted text, so re-read long lines (rewrapped) before targeting them.
+- **Hook H1 runs `ruff format` + `ruff check --fix` after each Write/Edit of a `.py` file:** a later scripted replacement must match the formatted text, so re-read long lines (rewrapped) before targeting them. Each edit is linted alone: when moving a definition, remove the old one first (or in the same edit), or H1 reports F811.
 - `config.py` and `.claude/hooks/*` are standard library only (hooks run with the system `python3`, 3.11+).
 
 ## Layout

@@ -78,6 +78,10 @@ Quality gate before finishing (also hook H5 and CI): `ruff format --check`, `ruf
   show its old questions (e.g. the eval run's) unless you clear them on a copy, as `readme_screenshots.py` does.
   README images come only from the public eval library, never `data/` user files.
 - **Demo timing and audio:** find when things happen in `demo-raw.webm` with a contact sheet (`ffmpeg -ss A -to B -vf "fps=1,scale=768:-1,drawtext=text='%{pts\:hms}'…"` then `tile=3x6`); to try other music, call `demo_edit.join()` on the existing `build/demo/edit/seg-*.mkv` (only the audio is encoded). Captions say only what's on screen.
+- **Demo thumbnail** (`docs/screenshots/demo-thumbnail.png`, also YouTube's custom thumbnail) is `build/demo/edit/card-1.png`
+  at 1280×720 plus a play button drawn with PIL (no script): a re-cut that changes the title card needs both redone by hand.
+- **YouTube upload from Chrome:** give `demo.mp4` to the dialog's hidden file input (`file_upload`, ≤ 10 MB), never "Select files";
+  save as private, read `studio.youtube.com/video/<id>/claims` after ~20 min (Content ID check), and make it public only once the user says so.
 - **Screenshots of Streamlit pages:** `full_page=True` captures only the viewport (the app scrolls an inner container); screenshot an element (`page.locator("[data-testid=stExpander]")`) instead.
 - **Playwright video:** call `page.video.path()` inside `sync_playwright()` (after `context.close()`); the video runs ~0.5 s behind the script's clock, so trim cut points away from navigations.
 - **After a dependency spike:** `uv remove` leaves an empty group in `pyproject.toml`/`uv.lock`; restore both with `git restore pyproject.toml uv.lock && uv sync` (exact sync also removes packages a library installed at runtime, e.g. spaCy models).
